@@ -93,6 +93,7 @@ int main(int argc, char *argv[]) {
 
         selection_sort(M2, N / 2);
 
+#ifdef VERIFY
         float X = 0;
         float min = 0;
         for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
@@ -116,7 +117,6 @@ int main(int argc, char *argv[]) {
             }
         }
 
-#ifdef VERIFY
         printf("X=%f\n", X);
 #endif
     }
