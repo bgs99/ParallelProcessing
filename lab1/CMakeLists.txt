@@ -25,3 +25,7 @@ target_compile_definitions(lab1-seq-verify PRIVATE VERIFY)
 
 make_par_exec(lab1-par-verify 2)
 target_compile_definitions(lab1-par-verify PRIVATE VERIFY)
+
+find_program(BASH_PROGRAM bash)
+
+add_test(NAME verify COMMAND ${BASH_PROGRAM} ${CMAKE_CURRENT_SOURCE_DIR}/verify.sh ${CMAKE_CURRENT_BINARY_DIR})
