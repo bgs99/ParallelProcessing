@@ -4,7 +4,7 @@ rule cc
     command = $compiler $cflags $in -o $out
 
 rule clang_par
-    command = clang $cflags -fplugin=LLVMPolly.so -mllvm -polly -mllvm -polly-parallel -mllvm -polly-num-threads=$threads $in -o $out
+    command = $clang $cflags -fplugin=LLVMPolly.so -mllvm -polly -mllvm -polly-parallel -lgomp -mllvm -polly-num-threads=$threads $in -o $out
 
 rule gcc_par
     command = gcc $cflags -floop-parallelize-all -ftree-parallelize-loops=$threads $in -o $out
@@ -15,6 +15,9 @@ build ../build/lab1-gcc-seq: cc lab1.c
 
 build ../build/lab1-clang-seq: cc lab1.c
     compiler = clang
+
+build ../build/lab1-rocm-seq: cc lab1.c
+    compiler = /opt/rocm/llvm/bin/clang
 
 
 build ../build/lab1-gcc-par-1: gcc_par lab1.c
@@ -35,18 +38,43 @@ build ../build/lab1-gcc-par-10: gcc_par lab1.c
 
 build ../build/lab1-clang-par-1: clang_par lab1.c
     threads = 1
+    clang = clang
 
 build ../build/lab1-clang-par-2: clang_par lab1.c
     threads = 2
+    clang = clang
 
 build ../build/lab1-clang-par-4: clang_par lab1.c
     threads = 4
+    clang = clang
 
 build ../build/lab1-clang-par-8: clang_par lab1.c
     threads = 8
+    clang = clang
 
 build ../build/lab1-clang-par-10: clang_par lab1.c
     threads = 10
+    clang = clang
+
+build ../build/lab1-rocm-par-1: clang_par lab1.c
+    threads = 1
+    clang = /opt/rocm/llvm/bin/clang
+
+build ../build/lab1-rocm-par-2: clang_par lab1.c
+    threads = 2
+    clang = /opt/rocm/llvm/bin/clang
+
+build ../build/lab1-rocm-par-4: clang_par lab1.c
+    threads = 4
+    clang = /opt/rocm/llvm/bin/clang
+
+build ../build/lab1-rocm-par-8: clang_par lab1.c
+    threads = 8
+    clang = /opt/rocm/llvm/bin/clang
+
+build ../build/lab1-rocm-par-10: clang_par lab1.c
+    threads = 10
+    clang = /opt/rocm/llvm/bin/clang
 
 
 build ../build/lab1-gcc-seq-verify: cc lab1.c
@@ -64,6 +92,17 @@ build ../build/lab1-clang-seq-verify: cc lab1.c
 build ../build/lab1-clang-par-verify: clang_par lab1.c
     cflags = $cflags -DVERIFY
     threads = 2
+    clang = clang
+
+build ../build/lab1-rocm-seq-verify: cc lab1.c
+    cflags = $cflags -DVERIFY
+    compiler = /opt/rocm/llvm/bin/clang
+
+build ../build/lab1-rocm-par-verify: clang_par lab1.c
+    cflags = $cflags -DVERIFY
+    threads = 2
+    clang = /opt/rocm/llvm/bin/clang
+
 
 rule verify
     command = ./verify.sh $in && touch $out
@@ -72,4 +111,8 @@ build ../build/lab1-gcc-verified: verify ../build/lab1-gcc-seq-verify ../build/l
 
 build ../build/lab1-clang-verified: verify ../build/lab1-clang-seq-verify ../build/lab1-clang-par-verify
 
+build ../build/lab1-rocm-verified: verify ../build/lab1-rocm-seq-verify ../build/lab1-rocm-par-verify
+
 build ../build/lab1-gcc-clang-verified: verify ../build/lab1-gcc-seq-verify ../build/lab1-clang-seq-verify
+
+build ../build/lab1-clang-rocm-verified: verify ../build/lab1-clang-seq-verify ../build/lab1-rocm-seq-verify
