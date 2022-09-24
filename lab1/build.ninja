@@ -38,32 +38,21 @@ build ../build/lab1-gcc-par-2: gcc_par lab1.c
 build ../build/lab1-gcc-par-4: gcc_par lab1.c
     threads = 4
 
-build ../build/lab1-gcc-par-8: gcc_par lab1.c
-    threads = 8
-
-build ../build/lab1-gcc-par-10: gcc_par lab1.c
-    threads = 10
+build ../build/lab1-gcc-par-6: gcc_par lab1.c
+    threads = 6
 
 
 build ../build/lab1-icc-par-1: icc_par lab1.c
     threads = 1
-    compiler = $icc_comp
 
 build ../build/lab1-icc-par-2: icc_par lab1.c
     threads = 2
-    compiler = $icc_comp
 
 build ../build/lab1-icc-par-4: icc_par lab1.c
     threads = 4
-    compiler = $icc_comp
 
-build ../build/lab1-icc-par-8: icc_par lab1.c
-    threads = 8
-    compiler = $icc_comp
-
-build ../build/lab1-icc-par-10: icc_par lab1.c
-    threads = 10
-    compiler = $icc_comp
+build ../build/lab1-icc-par-6: icc_par lab1.c
+    threads = 6
 
 build ../build/lab1-solaris-par: solaris_par lab1.c
 

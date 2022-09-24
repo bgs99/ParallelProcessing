@@ -8,11 +8,13 @@ max=$3;
 
 shift 3;
 
-pars="1 2 4 8 10";
+pars="1 2 4 6";
 
 step=$(((max - min) / 10));
 
 echo "Step is $step";
+
+export LD_LIBRARY_PATH='/home/bgs99/Downloads/icc/intel/oneapi/compiler/2022.1.0/linux/compiler/lib/intel64'
 
 function process {
     bin="${base}-$1"
@@ -38,7 +40,12 @@ function process {
 
 process "seq";
 
-for par in ${pars}
-do
-    process "par-$par";
-done
+if [ -e "${base}-par" ]
+then
+    process "par"
+else
+    for par in ${pars}
+    do
+        process "par-$par";
+    done
+fi
