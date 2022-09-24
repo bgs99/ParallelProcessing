@@ -5,22 +5,22 @@ icc_comp = ${icc_path}/bin/intel64/icc
 solaris_comp = ~/Downloads/solaris/bin/sunCC
 
 rule gcc
-    command = gcc -O3 -Wall -Werror --std=gnu11 $define_flags $in -lm -o $out
+    command = gcc -O3 -Wall -Werror $define_flags $in -lm -o $out
 
 rule icc
     command = $icc_comp $define_flags $in -o $out
 
 rule solaris
-    command = $solaris_comp -O3 -m64 $in -o $out -lm
+    command = $solaris_comp $define_flags -O3 $in -o $out -lm
 
 rule gcc_par
-    command = gcc -O3 -Wall -Werror --std=gnu11 $define_flags -floop-parallelize-all -ftree-parallelize-loops=$threads $in -lm -o $out
+    command = gcc -O3 -Wall -Werror $define_flags -floop-parallelize-all -ftree-parallelize-loops=$threads $in -lm -o $out
 
 rule icc_par
     command = $icc_comp $define_flags -parallel -par-threshold0 -par-num-threads=$threads $in $linker_flags -o $out
 
 rule solaris_par
-    command = $solaris_comp -O3 -m64 -xautopar -xloopinfo $in -o $out -lm
+    command = $solaris_comp $define_flags -O3 -xautopar -xloopinfo $in -o $out -lm
 
 build ../build/lab1-gcc-seq: gcc lab1.c
 
@@ -67,35 +67,11 @@ build ../build/lab1-icc-par-10: icc_par lab1.c
 
 build ../build/lab1-solaris-par: solaris_par lab1.c
 
-build ../build/lab1-gcc-seq-verify: gcc lab1.c
-    define_flags = -DVERIFY
-
-build ../build/lab1-gcc-par-verify: gcc_par lab1.c
-    threads = 2
-    define_flags = -DVERIFY
-
-build ../build/lab1-icc-seq-verify: icc lab1.c
-    define_flags = -DVERIFY
-
-build ../build/lab1-icc-par-verify: icc_par lab1.c
-    threads = 2
-    define_flags = -DVERIFY
-
-build ../build/lab1-solaris-seq-verify: solaris lab1.c
-    define_flags = -DVERIFY
-
-build ../build/lab1-solaris-par-verify: solaris_par lab1.c
-    define_flags = -DVERIFY
-
 rule verify
-    command = ./verify.sh $in && touch $out
+    command = ./verify.py $in && touch $out
 
-build ../test_results/lab1-gcc-verified: verify ../build/lab1-gcc-seq-verify ../build/lab1-gcc-par-verify
+build ../test_results/lab1-gcc-verified: verify ../build/lab1-gcc-seq ../build/lab1-gcc-par-2 | verify.py
 
-#build ../test_results/lab1-icc-verified: verify ../build/lab1-icc-seq-verify ../build/lab1-icc-par-verify
+build ../test_results/lab1-icc-verified: verify ../build/lab1-icc-seq ../build/lab1-icc-par-2 | verify.py
 
-#build ../test_results/lab1-solaris-verified: verify ../build/lab1-solaris-seq-verify ../build/lab1-solaris-par-verify
-
-#build ../test_results/lab1-gcc-icc-verified: verify ../build/lab1-gcc-seq-verify ../build/lab1-icc-seq-verify
-
-#build ../test_results/lab1-icc-solaris-verified: verify ../build/lab1-icc-seq-verify ../build/lab1-solaris-seq-verify
+build ../test_results/lab1-solaris-verified: verify ../build/lab1-solaris-seq ../build/lab1-solaris-par | verify.py

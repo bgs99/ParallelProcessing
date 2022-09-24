@@ -55,11 +55,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-#ifdef VERIFY
-    const int loop_size = 5;
-#else
     const int loop_size = 100;
-#endif
 
     gettimeofday(&T1, NULL);
 
@@ -69,37 +65,36 @@ int main(int argc, char *argv[]) {
         // Generate
 
         float M1[NMAX];
-        for (int m1_i = 0; m1_i < N; ++m1_i) {
+        for (int m1_i = 0; m1_i < N; m1_i++) {
             M1[m1_i] = rand_f_r(&rand_seed, 1, A);
         }
 
         float M2[NMAX / 2];
-        for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
+        for (int m2_i = 0; m2_i < N / 2; m2_i++) {
             M2[m2_i] = rand_f_r(&rand_seed, A, 10 * A);
         }
 
         // Map
 
-        for (int m1_i = 0; m1_i < N; ++m1_i) {
+        for (int m1_i = 0; m1_i < N; m1_i++) {
             M1[m1_i] = sinh_sqr(M1[m1_i]);
         }
 
         float M2_copy[NMAX / 2];
-        for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
+        for (int m2_i = 0; m2_i < N / 2; m2_i++) {
             M2_copy[m2_i] = M2[m2_i];
         }
 
-        for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
+        for (int m2_i = 0; m2_i < N / 2; m2_i++) {
             M2[m2_i] = tan_abs((m2_i == 0 ? 0 : M2_copy[m2_i - 1]) + M2[m2_i]);
         }
 
-        for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
+        for (int m2_i = 0; m2_i < N / 2; m2_i++) {
             M2[m2_i] = powf(M1[m2_i], M2[m2_i]);
         }
 
         selection_sort(M2, N / 2);
 
-#ifdef VERIFY
         float X = 0;
         float min = 0;
         for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
@@ -124,7 +119,6 @@ int main(int argc, char *argv[]) {
         }
 
         printf("X=%f\n", X);
-#endif
     }
 
     gettimeofday(&T2, NULL);
