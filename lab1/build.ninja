@@ -1,23 +1,32 @@
-cflags = -O3 -Wall -Werror --std=gnu11 -lm
+define_flags =
+icc_path = ~/Downloads/icc/intel/oneapi/compiler/2022.1.0/linux
+icc_ldpath = ${icc_path}/compiler/lib/intel64
+icc_comp = ${icc_path}/bin/intel64/icc
+solaris_comp = ~/Downloads/solaris/bin/sunCC
 
-rule cc
-    command = $compiler $cflags $in -o $out
+rule gcc
+    command = gcc -O3 -Wall -Werror --std=gnu11 $define_flags $in -lm -o $out
 
-rule clang_par
-    command = $clang $cflags -fplugin=LLVMPolly.so -mllvm -polly -mllvm -polly-parallel -lgomp -mllvm -polly-num-threads=$threads $in -o $out
+rule icc
+    command = $icc_comp $define_flags $in -o $out
+
+rule solaris
+    command = $solaris_comp -O3 -m64 $in -o $out -lm
 
 rule gcc_par
-    command = gcc $cflags -floop-parallelize-all -ftree-parallelize-loops=$threads $in -o $out
+    command = gcc -O3 -Wall -Werror --std=gnu11 $define_flags -floop-parallelize-all -ftree-parallelize-loops=$threads $in -lm -o $out
 
+rule icc_par
+    command = $icc_comp $define_flags -parallel -par-threshold0 -par-num-threads=$threads $in $linker_flags -o $out
 
-build ../build/lab1-gcc-seq: cc lab1.c
-    compiler = gcc
+rule solaris_par
+    command = $solaris_comp -O3 -m64 -xautopar -xloopinfo $in -o $out -lm
 
-build ../build/lab1-clang-seq: cc lab1.c
-    compiler = clang
+build ../build/lab1-gcc-seq: gcc lab1.c
 
-build ../build/lab1-rocm-seq: cc lab1.c
-    compiler = /opt/rocm/llvm/bin/clang
+build ../build/lab1-icc-seq: icc lab1.c
+
+build ../build/lab1-solaris-seq: solaris lab1.c
 
 
 build ../build/lab1-gcc-par-1: gcc_par lab1.c
@@ -36,83 +45,57 @@ build ../build/lab1-gcc-par-10: gcc_par lab1.c
     threads = 10
 
 
-build ../build/lab1-clang-par-1: clang_par lab1.c
+build ../build/lab1-icc-par-1: icc_par lab1.c
     threads = 1
-    clang = clang
+    compiler = $icc_comp
 
-build ../build/lab1-clang-par-2: clang_par lab1.c
+build ../build/lab1-icc-par-2: icc_par lab1.c
     threads = 2
-    clang = clang
+    compiler = $icc_comp
 
-build ../build/lab1-clang-par-4: clang_par lab1.c
+build ../build/lab1-icc-par-4: icc_par lab1.c
     threads = 4
-    clang = clang
+    compiler = $icc_comp
 
-build ../build/lab1-clang-par-8: clang_par lab1.c
+build ../build/lab1-icc-par-8: icc_par lab1.c
     threads = 8
-    clang = clang
+    compiler = $icc_comp
 
-build ../build/lab1-clang-par-10: clang_par lab1.c
+build ../build/lab1-icc-par-10: icc_par lab1.c
     threads = 10
-    clang = clang
+    compiler = $icc_comp
 
-build ../build/lab1-rocm-par-1: clang_par lab1.c
-    threads = 1
-    clang = /opt/rocm/llvm/bin/clang
+build ../build/lab1-solaris-par: solaris_par lab1.c
 
-build ../build/lab1-rocm-par-2: clang_par lab1.c
-    threads = 2
-    clang = /opt/rocm/llvm/bin/clang
-
-build ../build/lab1-rocm-par-4: clang_par lab1.c
-    threads = 4
-    clang = /opt/rocm/llvm/bin/clang
-
-build ../build/lab1-rocm-par-8: clang_par lab1.c
-    threads = 8
-    clang = /opt/rocm/llvm/bin/clang
-
-build ../build/lab1-rocm-par-10: clang_par lab1.c
-    threads = 10
-    clang = /opt/rocm/llvm/bin/clang
-
-
-build ../build/lab1-gcc-seq-verify: cc lab1.c
-    compiler = gcc
-    cflags = $cflags -DVERIFY
+build ../build/lab1-gcc-seq-verify: gcc lab1.c
+    define_flags = -DVERIFY
 
 build ../build/lab1-gcc-par-verify: gcc_par lab1.c
-    cflags = $cflags -DVERIFY
     threads = 2
+    define_flags = -DVERIFY
 
-build ../build/lab1-clang-seq-verify: cc lab1.c
-    compiler = clang
-    cflags = $cflags -DVERIFY
+build ../build/lab1-icc-seq-verify: icc lab1.c
+    define_flags = -DVERIFY
 
-build ../build/lab1-clang-par-verify: clang_par lab1.c
-    cflags = $cflags -DVERIFY
+build ../build/lab1-icc-par-verify: icc_par lab1.c
     threads = 2
-    clang = clang
+    define_flags = -DVERIFY
 
-build ../build/lab1-rocm-seq-verify: cc lab1.c
-    cflags = $cflags -DVERIFY
-    compiler = /opt/rocm/llvm/bin/clang
+build ../build/lab1-solaris-seq-verify: solaris lab1.c
+    define_flags = -DVERIFY
 
-build ../build/lab1-rocm-par-verify: clang_par lab1.c
-    cflags = $cflags -DVERIFY
-    threads = 2
-    clang = /opt/rocm/llvm/bin/clang
-
+build ../build/lab1-solaris-par-verify: solaris_par lab1.c
+    define_flags = -DVERIFY
 
 rule verify
     command = ./verify.sh $in && touch $out
 
-build ../build/lab1-gcc-verified: verify ../build/lab1-gcc-seq-verify ../build/lab1-gcc-par-verify
+build ../test_results/lab1-gcc-verified: verify ../build/lab1-gcc-seq-verify ../build/lab1-gcc-par-verify
 
-build ../build/lab1-clang-verified: verify ../build/lab1-clang-seq-verify ../build/lab1-clang-par-verify
+#build ../test_results/lab1-icc-verified: verify ../build/lab1-icc-seq-verify ../build/lab1-icc-par-verify
 
-build ../build/lab1-rocm-verified: verify ../build/lab1-rocm-seq-verify ../build/lab1-rocm-par-verify
+#build ../test_results/lab1-solaris-verified: verify ../build/lab1-solaris-seq-verify ../build/lab1-solaris-par-verify
 
-build ../build/lab1-gcc-clang-verified: verify ../build/lab1-gcc-seq-verify ../build/lab1-clang-seq-verify
+#build ../test_results/lab1-gcc-icc-verified: verify ../build/lab1-gcc-seq-verify ../build/lab1-icc-seq-verify
 
-build ../build/lab1-clang-rocm-verified: verify ../build/lab1-clang-seq-verify ../build/lab1-rocm-seq-verify
+#build ../test_results/lab1-icc-solaris-verified: verify ../build/lab1-icc-seq-verify ../build/lab1-solaris-seq-verify

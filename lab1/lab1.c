@@ -44,10 +44,16 @@ int main(int argc, char *argv[]) {
     struct timeval T1, T2;
 
     if (argc < 2) {
+        fprintf(stderr, "Expected 1 arg with N\n");
         return -1;
     }
 
     const unsigned int N = atoi(argv[1]);
+    const unsigned int NMAX = 500000;
+    if (N > NMAX) {
+        fprintf(stderr, "Expected N to be less than %d\n", NMAX);
+        return -1;
+    }
 
 #ifdef VERIFY
     const int loop_size = 5;
@@ -62,12 +68,12 @@ int main(int argc, char *argv[]) {
 
         // Generate
 
-        float M1[N];
+        float M1[NMAX];
         for (int m1_i = 0; m1_i < N; ++m1_i) {
             M1[m1_i] = rand_f_r(&rand_seed, 1, A);
         }
 
-        float M2[N / 2];
+        float M2[NMAX / 2];
         for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
             M2[m2_i] = rand_f_r(&rand_seed, A, 10 * A);
         }
@@ -78,7 +84,7 @@ int main(int argc, char *argv[]) {
             M1[m1_i] = sinh_sqr(M1[m1_i]);
         }
 
-        float M2_copy[N / 2];
+        float M2_copy[NMAX / 2];
         for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
             M2_copy[m2_i] = M2[m2_i];
         }
