@@ -8,7 +8,7 @@ rule gcc
     command = gcc -O3 -Wall -Werror $define_flags $in -lm -o $out
 
 rule icc
-    command = $icc_comp $define_flags $in -o $out
+    command = $icc_comp $define_flags -O3 $in -o $out
 
 rule solaris
     command = $solaris_comp $define_flags -O3 $in -o $out -lm
@@ -17,7 +17,7 @@ rule gcc_par
     command = gcc -O3 -Wall -Werror $define_flags -floop-parallelize-all -ftree-parallelize-loops=$threads $in -lm -o $out
 
 rule icc_par
-    command = $icc_comp $define_flags -parallel -par-threshold0 -par-num-threads=$threads $in $linker_flags -o $out
+    command = $icc_comp $define_flags -O3 -parallel -par-threshold0 -par-num-threads=$threads $in $linker_flags -o $out
 
 rule solaris_par
     command = $solaris_comp $define_flags -O3 -xautopar -xloopinfo $in -o $out -lm
