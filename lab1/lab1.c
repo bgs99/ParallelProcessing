@@ -59,6 +59,8 @@ int main(int argc, char *argv[]) {
 
     gettimeofday(&T1, NULL);
 
+    float Xs[loop_size];
+
     for (int i = 0; i < loop_size; i++) {
         unsigned int rand_seed = i;
 
@@ -118,7 +120,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        printf("X=%f\n", X);
+        Xs[i] = X;
     }
 
     gettimeofday(&T2, NULL);
@@ -127,6 +129,10 @@ int main(int argc, char *argv[]) {
         1000 * (T2.tv_sec - T1.tv_sec) + (T2.tv_usec - T1.tv_usec) / 1000;
 
     printf("\nN=%d. Milliseconds passed: %ld\n", N, delta_ms);
+
+    for (int i = 0; i < loop_size; i++) {
+        printf("X=%f\n", Xs[i]);
+    }
 
     return 0;
 }
