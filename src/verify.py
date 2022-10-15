@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import math
 import sys
 import re
 import os
@@ -31,10 +32,22 @@ def proc_to_xs(proc: str, additional_arg: str | None) -> List[float]:
 xs_1: List[float] = proc_to_xs(sys.argv[1], None)
 xs_2: List[float] = proc_to_xs(sys.argv[2], sys.argv[3])
 
+if len(xs_1) != len(xs_2):
+    raise Exception(f"Length mismatch: {len(xs_1)} vs {len(xs_2)}")
+
 total_diff: float = 0.0
 max_diff: float = 0.0
-for (x1, x2) in zip(xs_1, xs_2):
+for (i, (x1, x2)) in enumerate(zip(xs_1, xs_2)):
+    if math.isinf(x1) and not math.isinf(x2):
+        print(f"inf mismatch on line {i}: {x1} vs {x2}")
+        total_diff += math.inf
+        max_diff += math.inf
+        continue
     diff: float = abs(x1 - x2) / x1
+    if math.isnan(diff):
+        continue
+    if diff != 0:
+        print(f"mismatch on line {i} of {diff}: {x1} vs {x2}")
     if diff > max_diff:
         max_diff = diff
     total_diff += diff
@@ -42,6 +55,3 @@ for (x1, x2) in zip(xs_1, xs_2):
 average_diff: float = total_diff / len(xs_1)
 
 print(f'Relative diff average: {average_diff}, max: {max_diff}')
-
-if average_diff > 2e-6 or max_diff > 1e-5:
-    raise Exception("Diff is too big")

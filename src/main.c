@@ -88,7 +88,18 @@ int main(int argc, char *argv[]) {
 
         fwsPow_32f_A24(M1, M2, M2, N / 2);
 
+        // Uncomment to improve correctness
+        /*for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
+            if (isinf(M1[m2_i])) {
+                M2[m2_i] = INFINITY;
+            }
+        }*/
+
+        // Sort
+
         selection_sort(M2, N / 2);
+
+        // Reduce
 
         float X = 0;
         float min = 0;
