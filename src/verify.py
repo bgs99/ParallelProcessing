@@ -2,6 +2,7 @@
 
 import sys
 import re
+import os
 import subprocess
 from typing import List
 
@@ -11,11 +12,12 @@ if len(sys.argv) < 3:
 x_re = re.compile(rb'^X=(.*)$')
 
 
-def proc_to_xs(proc: str) -> List[float]:
+def proc_to_xs(proc: str, additional_arg: str | None) -> List[float]:
     results: List[float] = []
-    icc_ld_lib_path = "/home/bgs99/Downloads/icc/intel/oneapi/compiler/2022.1.0/linux/compiler/lib/intel64"
+    ld_lib_path = '/home/' + os.environ['USER'] + '/Downloads/framewave/lib'
+    to_run: List[str] = [proc, '1000'] if additional_arg is None else [proc, additional_arg, '1000']
     res: subprocess.CompletedProcess = subprocess.run(
-        [proc, "1000"], capture_output=True, env={'LD_LIBRARY_PATH': icc_ld_lib_path})
+        to_run, capture_output=True, env={'LD_LIBRARY_PATH': ld_lib_path})
 
     for line in res.stdout.splitlines():
         match: re.Match[bytes] | None = re.fullmatch(x_re, line)
@@ -26,8 +28,8 @@ def proc_to_xs(proc: str) -> List[float]:
     return results
 
 
-xs_1: List[float] = proc_to_xs(sys.argv[1])
-xs_2: List[float] = proc_to_xs(sys.argv[2])
+xs_1: List[float] = proc_to_xs(sys.argv[1], None)
+xs_2: List[float] = proc_to_xs(sys.argv[2], sys.argv[3])
 
 total_diff: float = 0.0
 max_diff: float = 0.0
