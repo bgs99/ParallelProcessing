@@ -2,7 +2,7 @@ set(CMAKE_C_COMPILER gcc)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(FramewaveBaseDir /home/bgs99/Downloads/framewave)
+set(FramewaveBaseDir /home/$ENV{USER}/Downloads/framewave)
 
 add_executable(lab2 main.c)
 
