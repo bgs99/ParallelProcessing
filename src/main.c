@@ -36,18 +36,18 @@ int main(int argc, char *argv[]) {
     struct timeval T1, T2;
 
     if (argc < 3) {
-        fprintf(stderr, "Expected 2 args with N and M\n");
+        fprintf(stderr, "Expected 2 args with M and N\n");
         return -1;
     }
 
-    const unsigned int N = atoi(argv[1]);
+    const unsigned int N = atoi(argv[2]);
     const unsigned int NMAX = 500000;
     if (N > NMAX) {
         fprintf(stderr, "Expected N to be less than %d\n", NMAX);
         return -1;
     }
 
-    const unsigned int M = atoi(argv[2]);
+    const unsigned int M = atoi(argv[1]);
     fwSetNumThreads(M);
 
     const int loop_size = 100;

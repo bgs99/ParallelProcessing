@@ -8,18 +8,20 @@ max=$3;
 
 shift 3;
 
-pars="1 2 4 6";
+pars="1 2 4 6 8";
 
 step=$(((max - min) / 10));
 
 echo "Step is $step";
 
-export LD_LIBRARY_PATH='/home/bgs99/Downloads/icc/intel/oneapi/compiler/2022.1.0/linux/compiler/lib/intel64'
+export LD_LIBRARY_PATH='/home/$ENV{USER}/Downloads/framewave/lib'
 
 function process {
-    bin="${base}-$1"
+    par=$1;
+    bin="${base} ${par}";
+    csv="${base}-${par}.csv";
     echo "Measuring $bin";
-    rm -f ${bin}.csv
+    rm -f ${csv};
     for i in {0..10}
     do
         n=$((min + i * step));
@@ -33,19 +35,12 @@ function process {
                 mindelta=$delta;
             fi
         done
-        echo "$n;$mindelta" >> ${bin}.csv;
+        echo "$n;$mindelta" >> ${csv};
         echo "$n;$mindelta";
     done
 }
 
-process "seq";
-
-if [ -e "${base}-par" ]
-then
-    process "par"
-else
-    for par in ${pars}
-    do
-        process "par-$par";
-    done
-fi
+for par in ${pars}
+do
+    process $par;
+done
