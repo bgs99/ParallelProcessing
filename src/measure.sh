@@ -19,7 +19,8 @@ export LD_LIBRARY_PATH='/home/$ENV{USER}/Downloads/framewave/lib'
 function process {
     par=$1;
     bin="${base} ${par}";
-    csv="${base}-${par}.csv";
+    report_base="${base}-${par}";
+    csv="${report_base}.csv";
     echo "Measuring $bin";
     rm -f ${csv};
     for i in {0..10}
@@ -37,6 +38,13 @@ function process {
         done
         echo "$n;$mindelta" >> ${csv};
         echo "$n;$mindelta";
+        if [ $i -eq 10 ]
+        then
+            mpstat -P ALL 1 > "${report_base}-stat.txt" &
+            stat_pid=$!;
+            $bin $n > /dev/null;
+            kill $stat_pid;
+        fi
     done
 }
 
