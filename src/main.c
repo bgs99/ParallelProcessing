@@ -1,3 +1,5 @@
+#include <fwBase.h>
+#include <fwSignal.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,16 +9,6 @@ const unsigned int A = 324;
 
 float rand_f_r(unsigned int *const seed, const float min, const float max) {
     return min + (float)rand_r(seed) / ((float)RAND_MAX / (max - min));
-}
-
-float sinh_sqr(const float val) {
-    const float t = sinhf(val);
-    return t * t;
-}
-
-float tan_abs(const float val) {
-    const float t = tanf(val);
-    return t >= 0 ? t : -t;
 }
 
 void swap(float *const xp, float *const yp) {
@@ -43,8 +35,8 @@ void selection_sort(float arr[], int n) {
 int main(int argc, char *argv[]) {
     struct timeval T1, T2;
 
-    if (argc < 2) {
-        fprintf(stderr, "Expected 1 arg with N\n");
+    if (argc < 3) {
+        fprintf(stderr, "Expected 2 args with N and M\n");
         return -1;
     }
 
@@ -54,6 +46,9 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Expected N to be less than %d\n", NMAX);
         return -1;
     }
+
+    const unsigned int M = atoi(argv[2]);
+    fwSetNumThreads(M);
 
     const int loop_size = 100;
 
@@ -76,24 +71,26 @@ int main(int argc, char *argv[]) {
             M2[m2_i] = rand_f_r(&rand_seed, A, 10 * A);
         }
 
-        // Map
+        // Map 1
 
-        for (int m1_i = 0; m1_i < N; m1_i++) {
-            M1[m1_i] = sinh_sqr(M1[m1_i]);
-        }
+        fwsSinh_32f_A24(M1, M1, N);
+        fwsMul_32f_I(M1, M1, N);
 
-        float M2_copy[NMAX / 2];
+        // Map 2
+
+        float M2_copy[NMAX / 2 + 1];
+        M2_copy[0] = 0;
         for (int m2_i = 0; m2_i < N / 2; m2_i++) {
-            M2_copy[m2_i] = M2[m2_i];
+            M2_copy[m2_i + 1] = M2[m2_i];
         }
 
-        for (int m2_i = 0; m2_i < N / 2; m2_i++) {
-            M2[m2_i] = tan_abs((m2_i == 0 ? 0 : M2_copy[m2_i - 1]) + M2[m2_i]);
-        }
+        fwsAdd_32f_I(M2_copy, M2, N / 2);
+        fwsTan_32f_A24(M2, M2, N / 2);
+        fwsAbs_32f_I(M2, N / 2);
 
-        for (int m2_i = 0; m2_i < N / 2; m2_i++) {
-            M2[m2_i] = powf(M1[m2_i], M2[m2_i]);
-        }
+        // Merge
+
+        fwsPow_32f_A24(M1, M2, M2, N / 2);
 
         selection_sort(M2, N / 2);
 
