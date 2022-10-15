@@ -40,15 +40,14 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    const unsigned int N = atoi(argv[2]);
-    const unsigned int NMAX = 500000;
-    if (N > NMAX) {
-        fprintf(stderr, "Expected N to be less than %d\n", NMAX);
-        return -1;
-    }
-
     const unsigned int M = atoi(argv[1]);
     fwSetNumThreads(M);
+
+    const unsigned int N = atoi(argv[2]);
+    
+    float *M1 = malloc(sizeof(float) * N);
+    float *M2 = malloc(sizeof(float) * N / 2);
+    float *M2_copy = malloc(sizeof(float) * N / 2 + 1);
 
     const int loop_size = 100;
 
@@ -61,12 +60,10 @@ int main(int argc, char *argv[]) {
 
         // Generate
 
-        float M1[NMAX];
         for (int m1_i = 0; m1_i < N; m1_i++) {
             M1[m1_i] = rand_f_r(&rand_seed, 1, A);
         }
 
-        float M2[NMAX / 2];
         for (int m2_i = 0; m2_i < N / 2; m2_i++) {
             M2[m2_i] = rand_f_r(&rand_seed, A, 10 * A);
         }
@@ -78,7 +75,6 @@ int main(int argc, char *argv[]) {
 
         // Map 2
 
-        float M2_copy[NMAX / 2 + 1];
         M2_copy[0] = 0;
         for (int m2_i = 0; m2_i < N / 2; m2_i++) {
             M2_copy[m2_i + 1] = M2[m2_i];
