@@ -8,7 +8,7 @@ max=$3;
 
 shift 3;
 
-pars="1 2 4 6 8";
+pars="1 2 3 4 6 8";
 
 step=$(((max - min) / 10));
 
