@@ -1,14 +1,29 @@
-#include <fwBase.h>
-#include <fwSignal.h>
 #include <math.h>
+#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
+
+#pragma GCC diagnostic ignored "-Wunknown-pragmas"
+
+#ifndef _OPENMP
+void omp_set_num_threads(int _threads) {}
+#endif // ndef _OPENMP
 
 const unsigned int A = 324;
 
 float rand_f_r(unsigned int *const seed, const float min, const float max) {
     return min + (float)rand_r(seed) / ((float)RAND_MAX / (max - min));
+}
+
+float sinh_sqr(const float val) {
+    const float t = sinhf(val);
+    return t * t;
+}
+
+float tan_abs(const float val) {
+    const float t = tanf(val);
+    return t >= 0 ? t : -t;
 }
 
 void swap(float *const xp, float *const yp) {
@@ -18,10 +33,8 @@ void swap(float *const xp, float *const yp) {
 }
 
 void selection_sort(float arr[], int n) {
-    int min_idx;
-
     for (int i = 0; i < n - 1; i++) {
-        min_idx = i;
+        int min_idx = i;
         for (int j = i + 1; j < n; j++) {
             if (arr[j] < arr[min_idx]) {
                 min_idx = j;
@@ -36,18 +49,20 @@ int main(int argc, char *argv[]) {
     struct timeval T1, T2;
 
     if (argc < 3) {
-        fprintf(stderr, "Expected 2 args with M and N\n");
+        fprintf(stderr, "Expected 1 arg with M and N\n");
         return -1;
     }
 
     const unsigned int M = atoi(argv[1]);
-    fwSetNumThreads(M);
+    omp_set_num_threads(M);
 
     const unsigned int N = atoi(argv[2]);
-    
+
     float *M1 = malloc(sizeof(float) * N);
     float *M2 = malloc(sizeof(float) * N / 2);
     float *M2_copy = malloc(sizeof(float) * N / 2 + 1);
+    int m1_i;
+    int m2_i;
 
     const int loop_size = 100;
 
@@ -68,40 +83,30 @@ int main(int argc, char *argv[]) {
             M2[m2_i] = rand_f_r(&rand_seed, A, 10 * A);
         }
 
-        // Map 1
+        // Map
 
-        fwsSinh_32f_A24(M1, M1, N);
-        fwsMul_32f_I(M1, M1, N);
-
-        // Map 2
-
-        M2_copy[0] = 0;
-        for (int m2_i = 0; m2_i < N / 2; m2_i++) {
-            M2_copy[m2_i + 1] = M2[m2_i];
+#pragma omp parallel for default(none) private(m1_i) shared(M1, N)
+        for (m1_i = 0; m1_i < N; m1_i++) {
+            M1[m1_i] = sinh_sqr(M1[m1_i]);
         }
 
-        fwsAdd_32f_I(M2_copy, M2, N / 2);
-        fwsTan_32f_A24(M2, M2, N / 2);
-        fwsAbs_32f_I(M2, N / 2);
+#pragma omp parallel for default(none) private(m2_i) shared(M2, M2_copy, N)
+        for (m2_i = 0; m2_i < N / 2; m2_i++) {
+            M2_copy[m2_i] = M2[m2_i];
+        }
 
-        // Merge
+#pragma omp parallel for default(none) private(m2_i) shared(M2, M2_copy, N)
+        for (m2_i = 0; m2_i < N / 2; m2_i++) {
+            M2[m2_i] = tan_abs((m2_i == 0 ? 0 : M2_copy[m2_i - 1]) + M2[m2_i]);
+        }
 
-        fwsPow_32f_A24(M1, M2, M2, N / 2);
-
-        // Uncomment to improve correctness
-        /*for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
-            if (isinf(M1[m2_i])) {
-                M2[m2_i] = INFINITY;
-            }
-        }*/
-
-        // Sort
+#pragma omp parallel for default(none) private(m2_i) shared(M1, M2, N)
+        for (m2_i = 0; m2_i < N / 2; m2_i++) {
+            M2[m2_i] = powf(M1[m2_i], M2[m2_i]);
+        }
 
         selection_sort(M2, N / 2);
 
-        // Reduce
-
-        float X = 0;
         float min = 0;
         for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
             if (M2[m2_i] != 0) {
@@ -113,6 +118,9 @@ int main(int argc, char *argv[]) {
             return -2;
         }
 
+        float X = 0;
+
+#pragma omp parallel for reduction(+:X) default(none) private(m2_i) shared(M1, M2, N, min)
         for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
             if (isinf(M2[m2_i])) {
                 continue;
