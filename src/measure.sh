@@ -14,8 +14,6 @@ step=$(((max - min) / 10));
 
 echo "Step is $step";
 
-export LD_LIBRARY_PATH='/home/$ENV{USER}/Downloads/framewave/lib'
-
 function process {
     par=$1;
     bin="${base} ${par}";

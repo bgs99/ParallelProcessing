@@ -15,10 +15,9 @@ x_re = re.compile(rb'^X=(.*)$')
 
 def proc_to_xs(proc: str, additional_arg: str | None) -> List[float]:
     results: List[float] = []
-    ld_lib_path = '/home/' + os.environ['USER'] + '/Downloads/framewave/lib'
     to_run: List[str] = [proc, '1000'] if additional_arg is None else [proc, additional_arg, '1000']
     res: subprocess.CompletedProcess = subprocess.run(
-        to_run, capture_output=True, env={'LD_LIBRARY_PATH': ld_lib_path})
+        to_run, capture_output=True)
 
     for line in res.stdout.splitlines():
         match: re.Match[bytes] | None = re.fullmatch(x_re, line)
