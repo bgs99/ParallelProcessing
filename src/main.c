@@ -6,6 +6,10 @@
 
 #pragma GCC diagnostic ignored "-Wunknown-pragmas"
 
+#ifndef LAB3_SCHEDULE
+#define LAB3_SCHEDULE auto
+#endif // ndef LAB3_SCHEDULE
+
 #ifndef _OPENMP
 void omp_set_num_threads(int _threads) {}
 #endif // ndef _OPENMP
@@ -85,22 +89,22 @@ int main(int argc, char *argv[]) {
 
         // Map
 
-#pragma omp parallel for default(none) private(m1_i) shared(M1, N)
+#pragma omp parallel for default(none) private(m1_i) shared(M1, N, M) schedule(LAB3_SCHEDULE)
         for (m1_i = 0; m1_i < N; m1_i++) {
             M1[m1_i] = sinh_sqr(M1[m1_i]);
         }
 
-#pragma omp parallel for default(none) private(m2_i) shared(M2, M2_copy, N)
+#pragma omp parallel for default(none) private(m2_i) shared(M2, M2_copy, N, M) schedule(LAB3_SCHEDULE)
         for (m2_i = 0; m2_i < N / 2; m2_i++) {
             M2_copy[m2_i] = M2[m2_i];
         }
 
-#pragma omp parallel for default(none) private(m2_i) shared(M2, M2_copy, N)
+#pragma omp parallel for default(none) private(m2_i) shared(M2, M2_copy, N, M) schedule(LAB3_SCHEDULE)
         for (m2_i = 0; m2_i < N / 2; m2_i++) {
             M2[m2_i] = tan_abs((m2_i == 0 ? 0 : M2_copy[m2_i - 1]) + M2[m2_i]);
         }
 
-#pragma omp parallel for default(none) private(m2_i) shared(M1, M2, N)
+#pragma omp parallel for default(none) private(m2_i) shared(M1, M2, N, M) schedule(LAB3_SCHEDULE)
         for (m2_i = 0; m2_i < N / 2; m2_i++) {
             M2[m2_i] = powf(M1[m2_i], M2[m2_i]);
         }
@@ -120,7 +124,7 @@ int main(int argc, char *argv[]) {
 
         float X = 0;
 
-#pragma omp parallel for reduction(+:X) default(none) private(m2_i) shared(M1, M2, N, min)
+#pragma omp parallel for reduction(+:X) default(none) private(m2_i) shared(M1, M2, N, min, M) schedule(LAB3_SCHEDULE)
         for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
             if (isinf(M2[m2_i])) {
                 continue;
