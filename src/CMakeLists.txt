@@ -19,3 +19,11 @@ foreach(schedule static dynamic guided)
         target_link_libraries(lab3-${schedule}-${chunk_size} m OpenMP::OpenMP_C)
     endforeach()
 endforeach()
+
+foreach(opt_level -O0 -O1 -O2)
+        add_executable(lab3-${opt_level} main.c)
+
+        target_compile_options(lab3-${opt_level} PRIVATE ${opt_level} -Wall -Werror -fopenmp)
+
+        target_link_libraries(lab3-${opt_level} m OpenMP::OpenMP_C)
+endforeach()
