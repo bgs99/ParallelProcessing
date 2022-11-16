@@ -26,7 +26,7 @@ function process {
         n=$((min + i * step));
         delta=$($bin $n | sed -En 's/^.* ([0-9]+)$/\1/p');
         mindelta=$delta
-        for j in {1..4}
+        for j in {1..10}
         do
             delta=$($bin $n | sed -En 's/^.* ([0-9]+)$/\1/p');
             if [ $delta -le $mindelta ]
