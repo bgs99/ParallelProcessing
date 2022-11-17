@@ -47,7 +47,7 @@ float tan_abs(const float val) {
 }
 
 void swap(float *const xp, float *const yp) {
-    const int temp = *xp;
+    const float temp = *xp;
     *xp = *yp;
     *yp = temp;
 }
@@ -61,7 +61,7 @@ void selection_sort(float arr[], int n) {
             }
         }
 
-        swap(&arr[min_idx], &arr[i]);
+        swap(&arr[i], &arr[min_idx]);
     }
 }
 
