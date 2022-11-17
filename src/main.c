@@ -76,7 +76,9 @@ void split_sort(float array[], const int array_len) {
     const int span_len = array_len / span_count + (array_len % span_count > 0);
     struct span spans[span_count];
     float array_copy[array_len];
-    memcpy(array_copy, array, array_len);
+    for (int element_idx = 0; element_idx < array_len; ++element_idx) {
+        array_copy[element_idx] = array[element_idx];
+    }
 
 #pragma omp parallel for default(none)                                         \
     shared(span_count, array_len, span_len, spans, array_copy)
