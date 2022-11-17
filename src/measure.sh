@@ -29,6 +29,7 @@ function process {
         for j in {1..10}
         do
             delta=$($bin $n | sed -En 's/^.* ([0-9]+)$/\1/p');
+            echo "$n;$delta" >> ${csv}-j;
             if [ $delta -le $mindelta ]
             then
                 mindelta=$delta;

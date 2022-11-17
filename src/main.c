@@ -130,7 +130,7 @@ int main(int argc, char *argv[]) {
     int m1_i;
     int m2_i;
 
-    const int loop_size = 100;
+    const int loop_size = LAB4_LOOP_SIZE;
 
     const double T1 = omp_get_wtime();
     double T2;

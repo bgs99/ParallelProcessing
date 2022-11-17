@@ -3,7 +3,7 @@
 set -e
 shopt -s extglob
 
-for exe in ../build/src/lab3*
+for exe in ../build/src/lab4*
 do
     echo "Measuring $exe...";
     ./measure.sh $exe 900 25000;
