@@ -19,8 +19,9 @@
 
 #include <sys/time.h>
 
-void omp_set_num_threads(int _threads) {}
+void omp_set_num_threads(int /*threads*/) {}
 int omp_get_num_procs() { return 1; }
+void omp_set_nested(bool /*set*/) {}
 
 double omp_get_wtime() {
     struct timeval t;
@@ -121,6 +122,7 @@ int main(int argc, char *argv[]) {
 
     const unsigned int M = atoi(argv[1]);
     omp_set_num_threads(M);
+    omp_set_nested(true);
 
     const unsigned int N = atoi(argv[2]);
 
