@@ -83,12 +83,19 @@ void split_sort(float array[], float array_copy_buf[], const int array_len,
 
     pthread_barrier_wait(barrier);
 
-    const int chunk_len = span_count <= total_threads
-                              ? 1
-                              : (span_count / total_threads +
-                                 (span_count % total_threads > 0 ? 1 : 0));
-    const int chunk_start = tid * chunk_len;
+    const int overhead =
+        span_count <= total_threads ? 0 : (span_count % total_threads);
+
+    const int base_chunk_len = (span_count <= total_threads) ? 1 : (span_count / total_threads);
+
+    const int overhead_spent = tid > overhead ? overhead : tid;
+
+    const int chunk_start = overhead_spent + base_chunk_len*tid;
+
+    const int chunk_len = base_chunk_len + (overhead > overhead_spent ? 1 : 0);
+
     int chunk_end = chunk_start + chunk_len;
+
     if (chunk_end > span_count) {
         chunk_end = span_count;
     }
