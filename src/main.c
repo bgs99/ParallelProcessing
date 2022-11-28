@@ -120,7 +120,8 @@ void *counting_thread(void *args_vptr) {
     struct counting_thread_args *args_ptr = args_vptr;
     struct counting_thread_args args = *args_ptr;
     while (true) {
-        int done_copy = atomic_load(args.iterations_done);
+        int done_copy =
+            atomic_load_explicit(args.iterations_done, memory_order_relaxed);
 
         printf("%f%% done\n", (double)done_copy / args.max_iterations * 100);
 
@@ -149,7 +150,7 @@ struct guided_data {
 struct span get_guided_span(struct guided_data data, float array[], int size,
                             int thread_count) {
     struct span result;
-    int old_unassigned = atomic_load(data.unassigned_iters);
+    int old_unassigned = atomic_load_explicit(data.unassigned_iters, memory_order_relaxed);
     while (true) {
         if (old_unassigned == 0) {
             result.size = 0;
@@ -164,8 +165,10 @@ struct span get_guided_span(struct guided_data data, float array[], int size,
             chunk_size = old_unassigned;
         }
 
-        if (atomic_compare_exchange_weak(data.unassigned_iters, &old_unassigned,
-                                         old_unassigned - chunk_size)) {
+        if (atomic_compare_exchange_weak_explicit(
+                data.unassigned_iters, &old_unassigned,
+                old_unassigned - chunk_size, memory_order_relaxed,
+                memory_order_relaxed)) {
             result.start = array + size - old_unassigned;
             result.size = chunk_size;
             return result;
@@ -292,6 +295,7 @@ int main(int argc, char *argv[]) {
     float Xs[loop_size];
 
     atomic_int iterations_done = 0;
+    int iterations_done_local = 0;
 
     pthread_cond_t done_cv = PTHREAD_COND_INITIALIZER;
     pthread_mutex_t done_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -320,7 +324,6 @@ int main(int argc, char *argv[]) {
         for (int m2_i = 0; m2_i < N / 2; m2_i++) {
             M2[m2_i] = rand_f_r(&rand_seed, A, 10 * A);
         }
-
 
         pthread_barrier_t barrier;
         pthread_barrier_init(&barrier, NULL, M);
@@ -358,7 +361,9 @@ int main(int argc, char *argv[]) {
 
         fprintf(stdout, "Reduce time: %f\n", get_wtime());
 
-        atomic_fetch_add(&iterations_done, 1);
+        ++iterations_done_local;
+        atomic_store_explicit(&iterations_done, iterations_done_local,
+                              memory_order_relaxed);
     }
 
     T2 = get_wtime();
