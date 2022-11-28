@@ -11,11 +11,11 @@ if len(sys.argv) < 3:
     raise Exception("Expected 2 executables to compare")
 
 x_re = re.compile(rb'^X=(.*)$')
-
+arg_len = 1000;
 
 def proc_to_xs(proc: str, additional_arg: str | None) -> List[float]:
     results: List[float] = []
-    to_run: List[str] = [proc, '1000'] if additional_arg is None else [proc, additional_arg, '1000']
+    to_run: List[str] = [proc, str(arg_len)] if additional_arg is None else [proc, additional_arg, str(arg_len)]
     res: subprocess.CompletedProcess = subprocess.run(
         to_run, capture_output=True)
 
