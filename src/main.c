@@ -176,6 +176,14 @@ struct span get_guided_span(struct guided_data data, float array[], int size,
     }
 }
 
+struct timing {
+    double gen;
+    double map;
+    double merge;
+    double sort;
+    double reduce;
+};
+
 struct work_args {
     int tid;
     int N;
@@ -186,6 +194,7 @@ struct work_args {
     float *result;
     pthread_barrier_t *barrier;
     struct guided_data reduction;
+    struct timing * timing;
 };
 
 void *work(void *args_vptr) {
@@ -212,13 +221,15 @@ void *work(void *args_vptr) {
         args.M2_copy[m2_i] = args.M2[m2_i];
     }
 
-    if (pthread_barrier_wait(args.barrier) == PTHREAD_BARRIER_SERIAL_THREAD) {
-        fprintf(stdout, "Map time: %f\n", get_wtime());
-    }
+    pthread_barrier_wait(args.barrier);
 
     for (int m2_i = m2_slice_start; m2_i < m2_slice_end; m2_i++) {
         args.M2[m2_i] =
             tan_abs((m2_i == 0 ? 0 : args.M2_copy[m2_i - 1]) + args.M2[m2_i]);
+    }
+
+    if (pthread_barrier_wait(args.barrier) == PTHREAD_BARRIER_SERIAL_THREAD) {
+        args.timing->map = get_wtime();
     }
 
     for (int m2_i = m2_slice_start; m2_i < m2_slice_end; m2_i++) {
@@ -229,14 +240,14 @@ void *work(void *args_vptr) {
         pthread_barrier_wait(args.barrier) == PTHREAD_BARRIER_SERIAL_THREAD;
 
     if (is_serial) {
-        fprintf(stdout, "Merge time: %f\n", get_wtime());
+        args.timing->merge = get_wtime();
     }
 
     split_sort(args.M2, args.M2_copy, args.N / 2, args.tid, args.barrier,
                is_serial);
 
     if (pthread_barrier_wait(args.barrier) == PTHREAD_BARRIER_SERIAL_THREAD) {
-        fprintf(stdout, "Sort time: %f\n", get_wtime());
+        args.timing->sort = get_wtime();
     }
 
     float min = 0;
@@ -268,6 +279,14 @@ void *work(void *args_vptr) {
     }
 
     return NULL;
+}
+
+void print_timing(struct timing * timing) {
+    printf("Generation time: %f sec\n", timing->gen);
+    printf("Map time: %f sec\n", timing->map);
+    printf("Merge time: %f sec\n", timing->merge);
+    printf("Sort time: %f sec\n", timing->sort);
+    printf("Reduce time: %f sec\n", timing->reduce);
 }
 
 int main(int argc, char *argv[]) {
@@ -312,7 +331,13 @@ int main(int argc, char *argv[]) {
     pthread_create(&progress_thread, NULL, &counting_thread,
                    &counting_thread_args);
 
+    struct timing total_timing = {};
+
     for (int i = 0; i < loop_size; i++) {
+        struct timing iteration_timing;
+
+        double t_start = get_wtime();
+
         unsigned int rand_seed = i;
 
         // Generate
@@ -324,6 +349,8 @@ int main(int argc, char *argv[]) {
         for (int m2_i = 0; m2_i < N / 2; m2_i++) {
             M2[m2_i] = rand_f_r(&rand_seed, A, 10 * A);
         }
+
+        iteration_timing.gen = get_wtime();
 
         pthread_barrier_t barrier;
         pthread_barrier_init(&barrier, NULL, M);
@@ -346,6 +373,7 @@ int main(int argc, char *argv[]) {
             args[m].barrier = &barrier;
             args[m].reduction.unassigned_iters = &unassigned_iters;
             args[m].reduction.min_chunk_size = 100;
+            args[m].timing = &iteration_timing;
 
             if (m > 0) {
                 pthread_create(&work_threads[m], NULL, &work, &args[m]);
@@ -359,7 +387,13 @@ int main(int argc, char *argv[]) {
             Xs[i] += results[m];
         }
 
-        fprintf(stdout, "Reduce time: %f\n", get_wtime());
+        iteration_timing.reduce = get_wtime();
+
+        total_timing.gen += iteration_timing.gen - t_start;
+        total_timing.map += iteration_timing.map - iteration_timing.gen;
+        total_timing.merge += iteration_timing.merge - iteration_timing.map;
+        total_timing.sort += iteration_timing.sort - iteration_timing.merge;
+        total_timing.reduce += iteration_timing.reduce - iteration_timing.sort;
 
         ++iterations_done_local;
         atomic_store_explicit(&iterations_done, iterations_done_local,
@@ -373,6 +407,8 @@ int main(int argc, char *argv[]) {
     pthread_mutex_unlock(&done_mutex);
 
     pthread_join(progress_thread, NULL);
+
+    print_timing(&total_timing);
 
     printf("\nN=%d. Milliseconds passed: %f\n", N, (T2 - T1) * 1000);
 
