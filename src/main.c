@@ -58,7 +58,8 @@ struct span {
 };
 
 void split_sort(float array[], float array_copy_buf[], const int array_len,
-                const int tid, pthread_barrier_t *barrier, bool is_serial) {
+                const int tid, const int total_threads,
+                pthread_barrier_t *barrier, bool is_serial) {
 
     const int span_count = get_num_procs();
     const int span_len = array_len / span_count + (array_len % span_count > 0);
@@ -82,8 +83,18 @@ void split_sort(float array[], float array_copy_buf[], const int array_len,
 
     pthread_barrier_wait(barrier);
 
-    if (tid < span_count) {
-        selection_sort(spans[tid].start, spans[tid].size);
+    const int chunk_len = span_count <= total_threads
+                              ? 1
+                              : (span_count / total_threads +
+                                 (span_count % total_threads > 0 ? 1 : 0));
+    const int chunk_start = tid * chunk_len;
+    int chunk_end = chunk_start + chunk_len;
+    if (chunk_end > span_count) {
+        chunk_end = span_count;
+    }
+
+    for (int i = chunk_start; i < chunk_end; ++i) {
+        selection_sort(spans[i].start, spans[i].size);
     }
 
     if (pthread_barrier_wait(barrier) != PTHREAD_BARRIER_SERIAL_THREAD) {
@@ -150,7 +161,8 @@ struct guided_data {
 struct span get_guided_span(struct guided_data data, float array[], int size,
                             int thread_count) {
     struct span result;
-    int old_unassigned = atomic_load_explicit(data.unassigned_iters, memory_order_relaxed);
+    int old_unassigned =
+        atomic_load_explicit(data.unassigned_iters, memory_order_relaxed);
     while (true) {
         if (old_unassigned == 0) {
             result.size = 0;
@@ -194,7 +206,7 @@ struct work_args {
     float *result;
     pthread_barrier_t *barrier;
     struct guided_data reduction;
-    struct timing * timing;
+    struct timing *timing;
 };
 
 void *work(void *args_vptr) {
@@ -243,8 +255,8 @@ void *work(void *args_vptr) {
         args.timing->merge = get_wtime();
     }
 
-    split_sort(args.M2, args.M2_copy, args.N / 2, args.tid, args.barrier,
-               is_serial);
+    split_sort(args.M2, args.M2_copy, args.N / 2, args.tid, args.M,
+               args.barrier, is_serial);
 
     if (pthread_barrier_wait(args.barrier) == PTHREAD_BARRIER_SERIAL_THREAD) {
         args.timing->sort = get_wtime();
@@ -281,7 +293,7 @@ void *work(void *args_vptr) {
     return NULL;
 }
 
-void print_timing(struct timing * timing) {
+void print_timing(struct timing *timing) {
     printf("Generation time: %f sec\n", timing->gen);
     printf("Map time: %f sec\n", timing->map);
     printf("Merge time: %f sec\n", timing->merge);
