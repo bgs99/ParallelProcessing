@@ -41,7 +41,7 @@
 \hfill \break 
 \hfill \break
 \large{
-    \textbf{Отчет по лабораторной работе №4}
+    \textbf{Отчет по лабораторной работе №5}
 
     \textbf{по дисциплине Параллельные вычисления}
 }
@@ -60,41 +60,32 @@
 2022
 \end{center}
 \normalsize
-\thispagestyle{empty} 
-\clearpage
-\def\contentsname{ОГЛАВЛЕНИЕ}
-\tableofcontents 
+\thispagestyle{empty}
 
 \clearpage
 \section*{ВВЕДЕНИЕ}
 \subsection*{Цель работы}
-Начуиться распараллеливать произвольные алгоритмы сортировки и использовать метод доверительных интервалов.
+Научиться распараллеливать приложения при помощи библиотеки pthread.
 \subsection*{Задачи}
 \begin{enumerate}
- \item Заменить вызовы функции $gettimeofday$ на $omp\_get\_wtime$.
+ \item Взять в качестве исходной OpenMP-программу из ЛР-4, в которой распараллелены все этапы вычисления. Убедиться, что в этой программе корректно реализован одновременный доступ к общей переменной, используемой для вывода в консоль процента завершения программы.
 
- \item Распараллелить вычисления на этапе Sort, для чего выполнить сортировку в два этапа:
- \begin{itemize}
-   \item Отсортировать первую и вторую половину массива в двух независимых нитях (можно использовать OpenMP-директиву "parallel sections");
-   \item Объединить отсортированные половины в единый массив.
+ \item Изменить исходную программу так, чтобы вместо OpenMP-директив применялся стандарт «POSIX Threads»:
+  \begin{itemize}
+  \item необходимо изменить всю программу;
+   \item допускается в качестве расписания циклов использовать «schedule static»;
+   \item хотя бы один цикл распараллелить, реализовав вручную расписание «schedule dynamic» или «schedule guided».
   \end{itemize}
 
- \item Написать функцию, которая один раз в секунду выводит в консоль сообщение о текущем проценте завершения работы программы. Указанную функцию необходимо запустить в отдельном потоке, параллельно работающем с основным вычислительным циклом.
 
- \item Обеспечить прямую совместимость (forward compatibility) написанной параллельной программы.
-
- \item Провести эксперименты, варьируя $N$ от $min(N_x/2, N_1)$ до $N_2$, где
-значения $N_1$ и $N_2$ взять из ЛР-1, а $N_x$ – это такое значение $N$, при котором накладные расходы на распараллеливание превышают выигрыш от распараллеливания.
-
- \item Уменьшить количество итераций основного цикла с 100 до 10 и провести эксперименты, замеряя время выполнения следующими методами:
+ \item Провести эксперименты и по результатам выполнить сравнение работы двух параллельных программ («OpenMP» и «POSIX Threads»), которое должно описывать следующие аспекты работы обеих программ (для различных $N$):
  \begin{itemize}
-   \item Использование минимального из десяти полученных замеров;
-   \item Расчёт по десяти измерениям доверительного интервала с уровнем доверия 95\%.
+  \item полное время решения задачи;
+  \item параллельное ускорение;
+  \item доля времени, проводимого на каждом этапе вычисления («нормированная диаграмма с областями и накоплением»);
+  \item количество строк кода, добавленных при распараллеливании, а также грубая оценка времени, потраченного на распараллеливание (накладные расходы программиста);
+  \item остальные аспекты, которые вы выяснили самостоятельно.
  \end{itemize}
-
- Привести графики параллельного ускорения для обоих методов в одной системе координат, при этом нижнюю и верхнюю границу доверительного интервала следует привести двумя независимыми графиками.
-
- \item В п.3 задания на этапе $Sort$ выполнить параллельную сортировку не двух частей массива, а $k$ частей в $k$ нитях (тредах), где $k$ – это количество процессоров (ядер) в системе, которое становится известным только на этапе выполнения программы с помощью команды $k = omp\_get\_num\_procs()$.
 \end{enumerate}
 
 \textbf{Вариант:} $(6*6*9) \% 47 = 42$ - гиперболический синус с последующим возведением в квадрат, модуль тангенса, возведение в степень, сортировка выбором.
@@ -146,48 +137,70 @@
 
 \section*{Результаты}
 
-Сначала были произведены замеры на интервале $[N_1;N_2]$ для определения  $N_x$.
+Были получены следующие результаты замеров времени для разных количеств потоков:
 
-\includegraphics[width=.8\linewidth]{../build/graphs/lab4/losses.png}
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.1/Time_complexity_threads_1.png}
 
-Как видно на графике, накладные расходы превышают выигрыш даже при $N=3310$. Вследствие этого было принято решение использовать $N_1$ из ЛР-1 в качестве начальной точки.
 
-По полученным ранее данным был построен график параллельних ускорений в зависимости от количества потоков для каждого $N$:
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.1/Time_complexity_threads_2.png}
 
-\includegraphics[width=.8\linewidth]{../build/graphs/lab4/acceleration.png}
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.1/Time_complexity_threads_3.png}
 
-На этом графике так же видно, что при небольшом входном массиве данных выигрыш от параллелизации теряется. Кроме того, на больших наборах данных ожидаемо наибольший выигрыш получается при количестве нитей, соответствующему аппаратному параллелилизму, и при дальнейшем увеличении количества потоков производительность снижается.
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.1/Time_complexity_threads_4.png}
 
-Далее были произведены замеры с уменьшенным числом итераций для вычисления доверительного интервала. Их результаты представлены ниже:
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.1/Time_complexity_threads_6.png}
 
-\includegraphics[width=.8\linewidth]{../build/graphs/lab4/time_comparison-900.png}
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.1/Time_complexity_threads_8.png}
 
-\includegraphics[width=.8\linewidth]{../build/graphs/lab4/time_comparison-3310.png}
+На данных графиках видно, что использование библиотеки pthread вместо OMP в общем случае не дает значительного выигрыша.
 
-\includegraphics[width=.8\linewidth]{../build/graphs/lab4/time_comparison-5720.png}
+Далее было расчитано параллельное ускорение:
 
-\includegraphics[width=.8\linewidth]{../build/graphs/lab4/time_comparison-8130.png}
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.2/Compare_accelerations_threads_1.png}
 
-\includegraphics[width=.8\linewidth]{../build/graphs/lab4/time_comparison-10540.png}
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.2/Compare_accelerations_threads_2.png}
 
-\includegraphics[width=.8\linewidth]{../build/graphs/lab4/time_comparison-12950.png}
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.2/Compare_accelerations_threads_3.png}
 
-\includegraphics[width=.8\linewidth]{../build/graphs/lab4/time_comparison-15360.png}
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.2/Compare_accelerations_threads_4.png}
 
-\includegraphics[width=.8\linewidth]{../build/graphs/lab4/time_comparison-17770.png}
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.2/Compare_accelerations_threads_6.png}
 
-\includegraphics[width=.8\linewidth]{../build/graphs/lab4/time_comparison-20180.png}
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.2/Compare_accelerations_threads_8.png}
 
-\includegraphics[width=.8\linewidth]{../build/graphs/lab4/time_comparison-22590.png}
+На данных графиках видно, что использование минимума в качестве метода отсеивания выбросов ненадежно.
+Кроме того мы видим, что ввиду по большей части совпадающего времени выполнения параллельное ускорение обеих программ примерно одинаково.
 
-\includegraphics[width=.8\linewidth]{../build/graphs/lab4/time_comparison-25000.png}
+Далее было рассмотрено время выполнения программ по этапам:
 
-По данным графикам можно оценить разброс значений в исходных данных.
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.3/exec_time_steps_threads_1.png}
+
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.3/exec_time_steps_threads_2.png}
+
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.3/exec_time_steps_threads_3.png}
+
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.3/exec_time_steps_threads_4.png}
+
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.3/exec_time_steps_threads_6.png}
+
+\includegraphics[width=.8\linewidth]{../build/graphs/lab5/task3.3/exec_time_steps_threads_8.png}
+
+На этих графиках видна ожидаемая картина: по мере роста размера входного массива растет доля времени, проводимая на самой асимптотически сложной части вычисления, сортировке.
+
+При распараллеливании было добавлено 180 строк кода, на распараллеливание было потрачено около 4.5 часов (включая реализацию дополнительных требований в ЛР-5).
+
 \clearpage
 \section*{ВЫВОД}
 \addcontentsline{toc}{section}{ВЫВОД}
 
-В результате данной работы была проведена этапа сортировки, принесшая значительное ускорение работы программы.
+В результате данной работы была проведено распараллеливание программы с помощью библиотеки pthread. Было обнаружено, что использование pthread вместо OMP не дает значительных преимуществ для данной задачи.
 
-Был использован метод доверительных интервалов для оценки времени выполнения программы.
+Кроме того были обнаружены следующие факты:
+
+\begin{itemize}
+ \item Guided расписание можно реализовать без мьютексов, на CAS-цикле.
+ \item Возвращаемое значение потоков в pthread бесполезно, так как требует аллокации - нельзя вернуть что-то из стека функции потока.
+ \item Если с обновлением атомарной переменной не связано обновление каких-то разделяемых данных, то достаточно Relaxed ордеринга.
+\end{itemize}
+
 \end{document}
