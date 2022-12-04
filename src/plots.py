@@ -1,15 +1,13 @@
-from dataclasses import dataclass
-from typing import Any, Iterable, Literal
-from matplotlib import pyplot as plt
-from collections import defaultdict
+import os
 import pandas as pd
-import scipy.stats as st
-import numpy as np
+from plot_data import PlotData
+import matplotlib.pyplot as plt
+from pathlib import Path
 
-# TODO: separate measurements directory from output directory
-# TODO: close matplotlib figures when they are not needed
 # TODO: consider typing
-# TODO: create directories needed for the output automatically
+
+# Change to your src folder
+src_folder = '../'
 
 # Remove .csv
 
@@ -17,126 +15,109 @@ import numpy as np
 def remove_extension(file_name):
     return file_name[:-4]
 
-
-def get_lab4_df(name: str, threads: int) -> pd.DataFrame:
-    return pd.read_csv(f'../measurements/{name}-{threads}.csv', sep=',', header=0, index_col=0)
+# Get dataframe from file
 
 
-min_point: int = 900
-max_point: int = 25000
+def get_df(file_name='seq.csv', file_dir='measurements', sep=',', names=[]) -> pd.DataFrame:
+    script_dir = os.path.dirname(src_folder)
+    results_dir = os.path.join(script_dir, file_dir)
+    skiprows = 1
 
-points: np.ndarray[Any, np.dtype[np.int32]] = np.linspace(
-    min_point, max_point, 11, dtype=np.int32)
+    if not names:
+        col_id = remove_extension(file_name)
+        names = ['N', f'{col_id}-delta']
+        skiprows = 0
 
-n_threads: list[int] = [1, 2, 3, 4, 6, 8]
-
-lab4_dfs: dict[int, pd.DataFrame] = {
-    threads: get_lab4_df('lab4', threads)
-    for threads in n_threads}
-
-
-def calculate_parallel_accelerations(base_df: pd.DataFrame, df: pd.DataFrame, columns: dict[str, str] = {'min': 'acceleration'}):
-    for key, value in columns.items():
-        df[value] = base_df['min'] / df[key]
+    df = pd.read_csv(results_dir + '/' + file_name,
+                        skiprows=skiprows, sep=sep, names=names)
+    return df
 
 
-for df in lab4_dfs.values():
-    calculate_parallel_accelerations(lab4_dfs[1], df)
 
-def plot_threads_comparison(
-        data_to_plot: dict[int, pd.DataFrame],
-        column_to_plot: str,
-        title: str,
-        save_folder: str,
-        measure_name: str):
+def get_time_plot(df_lab5: pd.DataFrame, df_lab4: pd.DataFrame, num_thread: int):
+    df = pd.DataFrame()
+    df['N'] = df_lab5['N']
+    df['delta_ms_lab4'] = df_lab4['min']
+    df['delta_ms_lab5'] = df_lab5['min']
+    df.set_index('N', inplace=True)
 
-    dfs: dict[int, pd.Series] = {threads: df[column_to_plot] for threads, df in  data_to_plot.items()}
-    pd.DataFrame(dfs).T.plot.line()
-    plt.title(title)
-    plt.xlabel('Number of threads')
-    plt.ylabel('Parallel acceleration')
-    plt.savefig(f'{save_folder}/{measure_name}.png')
-    plt.close()
-
-        
-
-plot_threads_comparison(
-    lab4_dfs,
-    'acceleration',
-    'Parallelisation overhead for different N',
-    '../build/graphs/lab4',
-    'losses'
-)
-
-def plot_compare_data(
-    dfs_to_plot: dict[int, pd.DataFrame],
-        col_name: str,
-        title: str,
-        save_folder: str,
-        measure_name: str):
-
-    combined_df = pd.DataFrame(data=[], index=points)
-
-    for name, df in dfs_to_plot.items():
-        combined_df[name] = df[col_name]
-
-    combined_df.plot.bar(width=0.75)
-
-    plt.title(title)
-    plt.xlabel('N')
-    plt.ylabel('Parallel acceleration')
-    plt.savefig(f'{save_folder}/{measure_name}.png')
-    plt.close()
+    title = f'Time complexity lab4 and lab5 (num threads={num_thread})'
+    xlabel = 'N'
+    ylabel = 'Time (ms)'
+    bar_plot = PlotData(df, title, xlabel, ylabel)
+    bar_plot.plot('bar', 20, 10)
+    bar_plot.save_figure(file_dir=src_folder + '/build/graphs/lab5/task3.1',
+                         filename=f'Time_complexity_threads_{num_thread}')
 
 
-plot_compare_data(lab4_dfs, 'acceleration',
-                  'Comparison of accelerations',
-                  '../build/graphs/lab4',
-                  'acceleration')
+def get_accelerations_plot(df_lab5: pd.DataFrame, df_lab4: pd.DataFrame, num_thread: int):
+    df = pd.DataFrame()
+    df['N'] = df_lab5['N']
+    df['acceleration_lab4'] = df_lab4['acc']
+    df['acceleration_lab5'] = df_lab5['acc']
+    df.set_index('N', inplace=True)
 
-lab4_int_dfs: dict[int, pd.DataFrame] = {
-    threads: get_lab4_df('lab4-int', threads)
-    for threads in n_threads}
+    title = f'Accelelrations lab4 and lab5 (num threads={num_thread})'
+    xlabel = 'N'
+    ylabel = 'Acceleration'
 
-
-def calculate_student(df: pd.DataFrame):
-    data: pd.DataFrame = df.loc[:, '0':'9'].T
-    mean: pd.Series = data.mean(axis=0)
-    scale: pd.Series = st.sem(data)
-    low, high = st.t.interval(
-        alpha=0.95, df=10,
-        loc=mean,
-        scale=scale)
-    df['low'] = low
-    df['high'] = high
+    bar_plot = PlotData(df, title, xlabel, ylabel)
+    bar_plot.plot('bar', 20, 10)
+    bar_plot.save_figure(file_dir=src_folder + '/build/graphs/lab5/task3.2',
+                         filename=f'Compare_accelerations_threads_{num_thread}')
 
 
-def plot_line_data(
-        data_to_plot: dict[int, pd.DataFrame],
-        columns_to_plot: list[str],
-        title: str,
-        save_folder: str,
-        measure_name: str):
+def get_exec_time_plot(df_lab5: pd.DataFrame, df_lab4: pd.DataFrame, num_thread: int):
+    part_names = ['Generation', 'Map', 'Merge', 'Sort', 'Reduce']
 
-    for point in points:
-        point = int(point)
-        dfs: dict[int, pd.Series] = {threads: df[columns_to_plot].loc[point] for threads, df in  data_to_plot.items()}
+    def get_norm_acc(df: pd.DataFrame) -> pd.DataFrame:
+        result = df.loc[:, part_names]
+        result = result.div(result.sum(axis=1), axis=0)
+        result['N'] = df['N']
+        return result
 
-        pd.DataFrame(dfs).T.plot.line()
-        plt.title(f'{title}, N={point}')
-        plt.xlabel('Number of threads')
-        plt.ylabel('Parallel acceleration')
-        plt.savefig(f'{save_folder}/{measure_name}-{point}.png')
+    def plot_exec_time(dfs: list[pd.DataFrame], num_thread: int):
+        df = pd.concat(dfs).sort_values('N')
+        df['N'] = df['N'].astype(str) + ', ' + df['label']
+        df.drop('label', axis=1)
+        df.plot(x='N', kind='bar', stacked=True,
+                     title=f'Execution time by steps by N (threads={num_thread})', figsize=(20, 15))
+        plt.ylabel("Time (ms)")
+        results_dir = src_folder + \
+            f'/build/graphs/lab5/task3.3/'
+        path = Path(results_dir)
+        path.mkdir(parents=True, exist_ok=True)
+
+        plt.savefig(results_dir + '/' +
+                    f'exec_time_steps_threads_{num_thread}')
         plt.close()
 
-for threads, df in lab4_int_dfs.items():
-    calculate_student(df)
-    calculate_parallel_accelerations(
-        lab4_int_dfs[1], df, {'min': 'max_acc', 'low': 'high_acc', 'high': 'low_acc'})
+    df_exec_5 = get_norm_acc(df_lab5)
+    df_exec_5['label'] = 'lab5'
+    df_exec_4 = get_norm_acc(df_lab4)
+    df_exec_4['label'] = 'lab4'
 
-plot_line_data(
-    lab4_int_dfs,
-    ['max_acc', 'low_acc', 'high_acc'],
-    f'Comparison of methods to measure time',
-    '../build/graphs/lab4',
-    f'time_comparison')
+
+    plot_exec_time([df_exec_5, df_exec_4], num_thread)
+
+
+def main():
+    n_threads = [1, 2, 3, 4, 6, 8]
+    names = ['N', 'min', 'Generation', 'Map', 'Merge', 'Sort', 'Reduce']
+
+    for n in n_threads:
+        df_lab5 = get_df(file_name=f'lab5-{n}.csv', names=names)
+        df_lab4 = get_df(file_name=f'lab5_4-{n}.csv', names=names)
+
+        # Calculate parallel accelerations
+        base = get_df('lab1-gcc-seq.csv', sep=';')['lab1-gcc-seq-delta']
+        df_lab5['acc'] = base /df_lab5['min']
+        df_lab4['acc'] = base / df_lab4['min']
+
+        get_time_plot(df_lab5, df_lab4, n)
+        get_accelerations_plot(df_lab5, df_lab4, n)
+        get_exec_time_plot(df_lab5, df_lab4, n)
+
+
+if __name__ == "__main__":
+    main()
