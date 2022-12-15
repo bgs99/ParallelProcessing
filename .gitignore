@@ -8,3 +8,4 @@ test_results/
 **/report.out
 **/report.synctex.gz
 **/report.toc
+**/__pycache__/

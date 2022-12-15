@@ -1,4 +1,6 @@
 #include <CL/cl.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -7,6 +9,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
@@ -23,9 +27,6 @@
         fprintf(stderr, "Error: %d at %d\n", ec, __LINE__);                    \
         abort();                                                               \
     }
-
-extern char cl_data_start[] asm("_binary_src_lab6_cl_start");
-extern char cl_data_end[] asm("_binary_src_lab6_cl_end");
 
 int get_num_procs() { return sysconf(_SC_NPROCESSORS_ONLN); }
 
@@ -328,8 +329,8 @@ void print_timing(struct timing *timing) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 3) {
-        fprintf(stderr, "Expected 1 arg with M and N\n");
+    if (argc < 4) {
+        fprintf(stderr, "Expected 3 args with M, N and CL path\n");
         return -1;
     }
 
@@ -353,45 +354,72 @@ int main(int argc, char *argv[]) {
         clCreateContext(NULL, 1, &device, NULL, NULL, &errc);
     EC_ASSERT(errc);
 
-    const char *source = cl_data_start;
-    const size_t source_size = cl_data_end - cl_data_start;
+    const char *cl_path = argv[3];
+    const int cl_fd = open(cl_path, O_RDONLY);
+    if (cl_fd < 0) {
+        fprintf(stderr, "Failed to open file '%s': %s\n", cl_path,
+                strerror(errno));
+        return -1;
+    }
+    struct stat cl_stat;
+    if (fstat(cl_fd, &cl_stat) != 0) {
+        fprintf(stderr, "Cannot get stats of '%s': %s\n", cl_path,
+                strerror(errno));
+        return -1;
+    }
 
-    const cl_program program =
-        clCreateProgramWithSource(context, 1, &source, &source_size, &errc);
+    const size_t program_size = cl_stat.st_size;
+    const char *program_source =
+        mmap(NULL, program_size, PROT_READ, MAP_PRIVATE, cl_fd, 0);
+
+    const cl_program program = clCreateProgramWithSource(
+        context, 1, &program_source, &program_size, &errc);
     EC_ASSERT(errc);
 
-    CL_ASSERT(errc, clBuildProgram(program, 1, &device, NULL, NULL, NULL));
+    errc = clBuildProgram(program, 1, &device, NULL, NULL, NULL);
+    if (errc != CL_SUCCESS) {
+        size_t log_size = 0;
+        CL_ASSERT(errc,
+                  clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG,
+                                        0, NULL, &log_size));
+        char log[log_size];
+        CL_ASSERT(errc,
+                  clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG,
+                                        log_size, log, NULL));
+        fprintf(stderr, "Failed to build program in %s: %s\n", cl_path, log);
+        return -1;
+    }
 
     cl_command_queue queue =
         clCreateCommandQueueWithProperties(context, device, NULL, &errc);
     EC_ASSERT(errc);
 
-    cl_mem buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
-                                   N * sizeof(cl_int), NULL, &errc);
+    cl_mem buffer =
+        clCreateBuffer(context, CL_MEM_WRITE_ONLY,
+                       M * sizeof(cl_int), NULL, &errc);
     EC_ASSERT(errc);
 
     const cl_kernel kernel = clCreateKernel(program, "setids", &errc);
     EC_ASSERT(errc);
 
     CL_ASSERT(errc, clSetKernelArg(kernel, 0, sizeof(cl_mem), &buffer));
-    CL_ASSERT(errc, clSetKernelArg(kernel, 1, sizeof(int), &N));
+    CL_ASSERT(errc, clSetKernelArg(kernel, 1, sizeof(int), &M));
 
-    CL_ASSERT(errc, clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &M,
-                                           NULL, 0, NULL, NULL));
+    CL_ASSERT(errc, clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &M, NULL, 0,
+                                           NULL, NULL));
 
     CL_ASSERT(errc, clFinish(queue));
 
     const cl_int *ptr = (const cl_int *)clEnqueueMapBuffer(
-        queue, buffer, true, CL_MAP_READ, 0, sizeof(cl_uint), 0, NULL, NULL,
+        queue, buffer, true, CL_MAP_READ, 0, sizeof(cl_uint)*M, 0, NULL, NULL,
         &errc);
     EC_ASSERT(errc);
 
-    for (int i = 0; i < N; ++i) {
+    for (int i = 0; i < M; ++i) {
         printf("Got result from CL: %d:%d\n", i, ptr[i]);
     }
 
     return 0;
-
 
     float *M1 = malloc(sizeof(float) * N);
     float *M2 = malloc(sizeof(float) * N / 2);
