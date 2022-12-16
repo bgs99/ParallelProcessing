@@ -13,7 +13,10 @@ max_point: int = 25000
 points: np.ndarray[Any, np.dtype[np.int32]] = np.linspace(
     min_point, max_point, 11, dtype=np.int32)
 
-thread_nums: list[int] = [1, 2, 3, 4, 6, 8]
+
+thread_nums: list[int] = [10, 20, 50, 100, 200]
+
+cl_file: str = 'main.cl'
 
 delta_re = re.compile(rb'^.*Milliseconds passed: (.+)$')
 timing_re = re.compile(rb'^.*time: (.+) sec$')
@@ -27,7 +30,7 @@ class ProcessResult:
 
 def process_single(exe: str, thread_num: int, data_len: int) -> ProcessResult:
     res: subprocess.CompletedProcess = subprocess.run(
-        [exe, str(thread_num), str(data_len)], capture_output=True)
+        [exe, str(thread_num), cl_file, str(data_len)], capture_output=True)
 
     total: float | None = None
     timings: list[float] = []
@@ -42,10 +45,10 @@ def process_single(exe: str, thread_num: int, data_len: int) -> ProcessResult:
 
     if total is None:
         raise Exception(
-            f"No delta found when running '{exe} {thread_num} {data_len}'")
+                f"No delta found when running '{exe} {thread_num} {cl_file} {data_len}': {res.stdout.splitlines()}")
     if len(timings) != 5:
         raise Exception(
-            f"Incorrect number of timings in output of '{exe} {thread_num} {data_len}': expected 5, but got {len(timings)}")
+            f"Incorrect number of timings in output of '{exe} {thread_num} {cl_file} {data_len}': expected 5, but got {len(timings)}")
 
     return ProcessResult(total, timings)
 
