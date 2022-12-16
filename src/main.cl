@@ -44,26 +44,37 @@ struct span {
     size_t len;
 };
 
-struct span get_span(const int n) {
-    const size_t threads = get_global_size(0);
-    const size_t idx = get_global_id(0);
-    const size_t span_len_max = n / threads + (n % threads > 0);
-    const size_t span_start = idx * span_len_max;
-    const size_t span_end_max = span_start + span_len_max;
-    const size_t span_end = span_end_max > n ? n : span_end_max;
+struct span get_span(const size_t threads, const size_t idx, const int n) {
+    const size_t overhead = n % threads;
+    const size_t base_span_len = n / threads;
+    const size_t overhead_spent = idx > overhead ? overhead : idx;
+    const size_t span_start = overhead_spent + base_span_len*idx;
+
+    const size_t span_len_with_overhead = base_span_len + (overhead > overhead_spent ? 1 : 0);
+
+    size_t span_end = span_start + span_len_with_overhead;
+
+    if (span_end > n) {
+        span_end = n;
+    }
+
     const size_t span_len = span_end - span_start;
+
     struct span res = {.start = span_start, .len = span_len};
     return res;
 }
 
 kernel void split_sort_k(global float *M2, const int n) {
-    const struct span sort_span = get_span(n / 2);
+    const size_t idx = get_global_id(0);
+    const size_t threads = get_global_size(0);
+    const struct span sort_span = get_span(threads, idx, n / 2);
     selection_sort(M2 + sort_span.start, sort_span.len);
 }
 
 kernel void reduce_k(global const float *M2, const int n, const float min, global float *result) {
     const size_t idx = get_global_id(0);
-    const struct span min_span = get_span(n / 2);
+    const size_t threads = get_global_size(0);
+    const struct span min_span = get_span(threads, idx, n / 2);
 
     float local_result = 0;
 

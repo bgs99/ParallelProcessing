@@ -10,3 +10,9 @@ target_compile_options(lab6 PRIVATE -O3 -g -Wall -Werror -DCL_TARGET_OPENCL_VERS
 
 target_link_libraries(lab6 PRIVATE OpenCL::OpenCL)
 
+
+add_executable(lab6-asan main.c)
+
+target_compile_options(lab6-asan PRIVATE -O3 -g -Wall -Werror -fsanitize=address -DCL_TARGET_OPENCL_VERSION=300)
+
+target_link_libraries(lab6-asan PRIVATE asan OpenCL::OpenCL)

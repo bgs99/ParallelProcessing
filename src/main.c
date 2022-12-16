@@ -59,11 +59,21 @@ struct span {
 };
 
 struct span get_span(const size_t threads, const size_t idx, const int n) {
-    const size_t span_len_max = n / threads + (n % threads > 0);
-    const size_t span_start = idx * span_len_max;
-    const size_t span_end_max = span_start + span_len_max;
-    const size_t span_end = span_end_max > n ? n : span_end_max;
+    const size_t overhead = n % threads;
+    const size_t base_span_len = n / threads;
+    const size_t overhead_spent = idx > overhead ? overhead : idx;
+    const size_t span_start = overhead_spent + base_span_len*idx;
+
+    const size_t span_len_with_overhead = base_span_len + (overhead > overhead_spent ? 1 : 0);
+
+    size_t span_end = span_start + span_len_with_overhead;
+
+    if (span_end > n) {
+        span_end = n;
+    }
+
     const size_t span_len = span_end - span_start;
+
     struct span res = {.start = span_start, .size = span_len};
     return res;
 }
@@ -170,7 +180,7 @@ int main(int argc, char *argv[]) {
     }
 
     cl_queue_properties props[] = {CL_QUEUE_PROPERTIES,
-                                   CL_QUEUE_PROFILING_ENABLE};
+                                   CL_QUEUE_PROFILING_ENABLE, 0};
 
     cl_command_queue queue =
         clCreateCommandQueueWithProperties(context, device, props, NULL);
@@ -337,6 +347,7 @@ int main(int argc, char *argv[]) {
     free(M1);
     free(M2);
     free(M2_copy);
+    free(results);
 
     return 0;
 }
