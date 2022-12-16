@@ -272,10 +272,9 @@ int main(int argc, char *argv[]) {
         cl_event read_e;
         // Complex move: load M2_buf as M2_copy so that merge_sort will write to
         // M2 and we can work with M2 later without additional buffer copies
-        CL_ASSERT(clEnqueueReadBuffer(queue, M2_buf, CL_FALSE, 0,
+        CL_ASSERT(clEnqueueReadBuffer(queue, M2_buf, CL_TRUE, 0,
                                       M2_sz * sizeof(cl_float), M2_copy, 1,
                                       &sort_e, &read_e));
-        CL_ASSERT(clFinish(queue));
 
         const double t_sort_start = get_wtime();
 
@@ -304,10 +303,9 @@ int main(int argc, char *argv[]) {
         CL_ASSERT(clEnqueueNDRangeKernel(queue, reduce_k, 1, NULL, &M, NULL, 1,
                                          &write_e, &reduce_e));
 
-        CL_ASSERT(clEnqueueReadBuffer(queue, result_buf, CL_FALSE, 0,
+        CL_ASSERT(clEnqueueReadBuffer(queue, result_buf, CL_TRUE, 0,
                                       M * sizeof(cl_float), results, 1,
                                       &reduce_e, NULL));
-        CL_ASSERT(clFinish(queue));
 
         float X = 0;
         for (int m_i = 0; m_i < M; ++m_i) {
