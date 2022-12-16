@@ -322,7 +322,6 @@ int main(int argc, char *argv[]) {
         total_timing.sort +=
             t_sort_end - t_sort_start + get_events_time(sort_e, read_e);
         total_timing.reduce += t_reduce_done - t_sort_end;
-        break;
     }
 
     T2 = get_wtime();
