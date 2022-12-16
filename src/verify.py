@@ -5,7 +5,6 @@ import sys
 import re
 import os
 import subprocess
-from typing import List
 
 if len(sys.argv) < 3:
     raise Exception("Expected 2 executables to compare")
@@ -13,9 +12,9 @@ if len(sys.argv) < 3:
 x_re = re.compile(rb'^X=(.*)$')
 arg_len = 1000;
 
-def proc_to_xs(proc: str, additional_arg: str | None) -> List[float]:
-    results: List[float] = []
-    to_run: List[str] = [proc, str(arg_len)] if additional_arg is None else [proc, additional_arg, str(arg_len)]
+def proc_to_xs(proc: str, additional_args: list[str]) -> list[float]:
+    results: list[float] = []
+    to_run: list[str] = [proc] + additional_args + [str(arg_len)]
     res: subprocess.CompletedProcess = subprocess.run(
         to_run, capture_output=True)
 
@@ -28,8 +27,8 @@ def proc_to_xs(proc: str, additional_arg: str | None) -> List[float]:
     return results
 
 
-xs_1: List[float] = proc_to_xs(sys.argv[1], None)
-xs_2: List[float] = proc_to_xs(sys.argv[2], sys.argv[3])
+xs_1: list[float] = proc_to_xs(sys.argv[1], [])
+xs_2: list[float] = proc_to_xs(sys.argv[2], sys.argv[3:])
 
 if len(xs_1) != len(xs_2):
     raise Exception(f"Length mismatch: {len(xs_1)} vs {len(xs_2)}")
@@ -42,7 +41,7 @@ for (i, (x1, x2)) in enumerate(zip(xs_1, xs_2)):
         total_diff += math.inf
         max_diff += math.inf
         continue
-    diff: float = abs(x1 - x2) / x1
+    diff: float = abs(x1 - x2) / abs(x1)
     if math.isnan(diff):
         continue
     if diff != 0:

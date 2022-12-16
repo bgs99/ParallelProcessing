@@ -6,7 +6,7 @@ find_package(OpenCL REQUIRED)
 
 add_executable(lab6 main.c)
 
-target_compile_options(lab6 PRIVATE -Og -g -Wall -Werror -pthread -DCL_TARGET_OPENCL_VERSION=300)
+target_compile_options(lab6 PRIVATE -O3 -g -Wall -Werror -DCL_TARGET_OPENCL_VERSION=300)
 
-target_link_libraries(lab6 PRIVATE m pthread OpenCL::OpenCL)
+target_link_libraries(lab6 PRIVATE OpenCL::OpenCL)
 

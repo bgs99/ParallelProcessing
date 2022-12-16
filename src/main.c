@@ -1,9 +1,8 @@
 #include <CL/cl.h>
+#include <CL/cl_platform.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <math.h>
-#include <pthread.h>
-#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -17,18 +16,14 @@
 
 #include <CL/opencl.h>
 
-#define CL_ASSERT(ec, expr)                                                    \
-    if (ec = expr, ec != CL_SUCCESS) {                                         \
-        fprintf(stderr, "Error: %d at %d\n", ec, __LINE__);                    \
-        abort();                                                               \
+#define CL_ASSERT(expr)                                                        \
+    {                                                                          \
+        cl_int ec = expr;                                                      \
+        if (ec != CL_SUCCESS) {                                                \
+            fprintf(stderr, "Error: %d at %d\n", ec, __LINE__);                \
+            abort();                                                           \
+        }                                                                      \
     }
-#define EC_ASSERT(ec)                                                          \
-    if (ec != 0) {                                                             \
-        fprintf(stderr, "Error: %d at %d\n", ec, __LINE__);                    \
-        abort();                                                               \
-    }
-
-int get_num_procs() { return sysconf(_SC_NPROCESSORS_ONLN); }
 
 double get_wtime() {
     struct timeval t;
@@ -42,179 +37,6 @@ float rand_f_r(unsigned int *const seed, const float min, const float max) {
     return min + (float)rand_r(seed) / ((float)RAND_MAX / (max - min));
 }
 
-float sinh_sqr(const float val) {
-    const float t = sinhf(val);
-    return t * t;
-}
-
-float tan_abs(const float val) {
-    const float t = tanf(val);
-    return t >= 0 ? t : -t;
-}
-
-void swap(float *const xp, float *const yp) {
-    const float temp = *xp;
-    *xp = *yp;
-    *yp = temp;
-}
-
-void selection_sort(float arr[], int n) {
-    for (int i = 0; i < n - 1; i++) {
-        int min_idx = i;
-        for (int j = i + 1; j < n; j++) {
-            if (arr[j] < arr[min_idx]) {
-                min_idx = j;
-            }
-        }
-
-        swap(&arr[i], &arr[min_idx]);
-    }
-}
-
-struct span {
-    float *start;
-    int size;
-};
-
-void split_sort(float array[], float array_copy_buf[], const int array_len,
-                const int tid, const int total_threads,
-                pthread_barrier_t *barrier, bool is_serial) {
-
-    const int span_count = get_num_procs();
-    const int span_len = array_len / span_count + (array_len % span_count > 0);
-    struct span spans[span_count];
-
-    for (int i = 0; i < span_count; ++i) {
-        const int span_start = i * span_len;
-        const int span_end = span_start + span_len;
-        const int span_size =
-            (span_end > array_len ? array_len : span_end) - span_start;
-
-        spans[i].start = array_copy_buf + span_start;
-        spans[i].size = span_size;
-    }
-
-    if (is_serial) {
-        for (int element_idx = 0; element_idx < array_len; ++element_idx) {
-            array_copy_buf[element_idx] = array[element_idx];
-        }
-    }
-
-    pthread_barrier_wait(barrier);
-
-    const int overhead =
-        span_count <= total_threads ? 0 : (span_count % total_threads);
-
-    const int base_chunk_len =
-        (span_count <= total_threads) ? 1 : (span_count / total_threads);
-
-    const int overhead_spent = tid > overhead ? overhead : tid;
-
-    const int chunk_start = overhead_spent + base_chunk_len * tid;
-
-    const int chunk_len = base_chunk_len + (overhead > overhead_spent ? 1 : 0);
-
-    int chunk_end = chunk_start + chunk_len;
-
-    if (chunk_end > span_count) {
-        chunk_end = span_count;
-    }
-
-    for (int i = chunk_start; i < chunk_end; ++i) {
-        selection_sort(spans[i].start, spans[i].size);
-    }
-
-    if (pthread_barrier_wait(barrier) != PTHREAD_BARRIER_SERIAL_THREAD) {
-        return;
-    }
-
-    for (int element_idx = 0; element_idx < array_len; ++element_idx) {
-        float min = INFINITY;
-        int min_span_idx = 0;
-        for (int span_idx = 0; span_idx < span_count; ++span_idx) {
-            struct span *cur_span = spans + span_idx;
-            if (cur_span->size <= 0) {
-                continue;
-            }
-            if (*cur_span->start < min) {
-                min = *cur_span->start;
-                min_span_idx = span_idx;
-            }
-        }
-        array[element_idx] = min;
-        ++spans[min_span_idx].start;
-        --spans[min_span_idx].size;
-    }
-}
-
-struct counting_thread_args {
-    const int max_iterations;
-    atomic_int *iterations_done;
-    pthread_mutex_t *done_mutex;
-    pthread_cond_t *done_cv;
-};
-
-void *counting_thread(void *args_vptr) {
-    struct counting_thread_args *args_ptr = args_vptr;
-    struct counting_thread_args args = *args_ptr;
-    while (true) {
-        int done_copy =
-            atomic_load_explicit(args.iterations_done, memory_order_relaxed);
-
-        printf("%f%% done\n", (double)done_copy / args.max_iterations * 100);
-
-        if (done_copy == args.max_iterations) {
-            break;
-        }
-
-        struct timeval now;
-        gettimeofday(&now, NULL);
-        struct timespec wakeup_time = {.tv_sec = now.tv_sec + 1,
-                                       .tv_nsec = now.tv_usec * 1000};
-
-        pthread_mutex_lock(args.done_mutex);
-        pthread_cond_timedwait(args.done_cv, args.done_mutex, &wakeup_time);
-        pthread_mutex_unlock(args.done_mutex);
-    }
-
-    return NULL;
-}
-
-struct guided_data {
-    atomic_int *unassigned_iters;
-    int min_chunk_size;
-};
-
-struct span get_guided_span(struct guided_data data, float array[], int size,
-                            int thread_count) {
-    struct span result;
-    int old_unassigned =
-        atomic_load_explicit(data.unassigned_iters, memory_order_relaxed);
-    while (true) {
-        if (old_unassigned == 0) {
-            result.size = 0;
-            return result;
-        }
-
-        int chunk_size = old_unassigned / thread_count / 4;
-        if (chunk_size < data.min_chunk_size) {
-            chunk_size = data.min_chunk_size;
-        }
-        if (chunk_size > old_unassigned) {
-            chunk_size = old_unassigned;
-        }
-
-        if (atomic_compare_exchange_weak_explicit(
-                data.unassigned_iters, &old_unassigned,
-                old_unassigned - chunk_size, memory_order_relaxed,
-                memory_order_relaxed)) {
-            result.start = array + size - old_unassigned;
-            result.size = chunk_size;
-            return result;
-        }
-    }
-}
-
 struct timing {
     double gen;
     double map;
@@ -223,109 +45,72 @@ struct timing {
     double reduce;
 };
 
-struct work_args {
-    int tid;
-    int N;
-    int M;
-    float *M1;
-    float *M2;
-    float *M2_copy;
-    float *result;
-    pthread_barrier_t *barrier;
-    struct guided_data reduction;
-    struct timing *timing;
-};
-
-void *work(void *args_vptr) {
-    struct work_args *args_ptr = args_vptr;
-    struct work_args args = *args_ptr;
-
-    const int m1_slice_len = args.N / args.M + (args.N % args.M == 0 ? 0 : 1);
-    const int m1_slice_start = args.tid * m1_slice_len;
-    const int m1_slice_end = m1_slice_start + m1_slice_len > args.N
-                                 ? args.N
-                                 : m1_slice_start + m1_slice_len;
-    const int m2_slice_len =
-        (args.N / 2) / args.M + ((args.N % (2 * args.M)) == 0 ? 0 : 1);
-    const int m2_slice_start = args.tid * m2_slice_len;
-    const int m2_slice_end = m2_slice_start + m2_slice_len > args.N / 2
-                                 ? args.N / 2
-                                 : m2_slice_start + m2_slice_len;
-
-    for (int m1_i = m1_slice_start; m1_i < m1_slice_end; m1_i++) {
-        args.M1[m1_i] = sinh_sqr(args.M1[m1_i]);
-    }
-
-    for (int m2_i = m2_slice_start; m2_i < m2_slice_end; m2_i++) {
-        args.M2_copy[m2_i] = args.M2[m2_i];
-    }
-
-    pthread_barrier_wait(args.barrier);
-
-    for (int m2_i = m2_slice_start; m2_i < m2_slice_end; m2_i++) {
-        args.M2[m2_i] =
-            tan_abs((m2_i == 0 ? 0 : args.M2_copy[m2_i - 1]) + args.M2[m2_i]);
-    }
-
-    if (pthread_barrier_wait(args.barrier) == PTHREAD_BARRIER_SERIAL_THREAD) {
-        args.timing->map = get_wtime();
-    }
-
-    for (int m2_i = m2_slice_start; m2_i < m2_slice_end; m2_i++) {
-        args.M2[m2_i] = powf(args.M1[m2_i], args.M2[m2_i]);
-    }
-
-    bool is_serial =
-        pthread_barrier_wait(args.barrier) == PTHREAD_BARRIER_SERIAL_THREAD;
-
-    if (is_serial) {
-        args.timing->merge = get_wtime();
-    }
-
-    split_sort(args.M2, args.M2_copy, args.N / 2, args.tid, args.M,
-               args.barrier, is_serial);
-
-    if (pthread_barrier_wait(args.barrier) == PTHREAD_BARRIER_SERIAL_THREAD) {
-        args.timing->sort = get_wtime();
-    }
-
-    float min = 0;
-    for (int m2_i = 0; m2_i < args.N / 2; ++m2_i) {
-        if (args.M2[m2_i] != 0) {
-            min = args.M2[m2_i];
-            break;
-        }
-    }
-    if (min == 0) {
-        abort();
-    }
-
-    *args.result = 0;
-    struct span guided_span;
-    while (guided_span =
-               get_guided_span(args.reduction, args.M2, args.N / 2, args.M),
-           guided_span.size > 0) {
-        for (int i = 0; i < guided_span.size; ++i) {
-            if (isinf(guided_span.start[i])) {
-                continue;
-            }
-            const float sin_res = sinf(guided_span.start[i]);
-            const unsigned int quotient = sin_res / min;
-            if (quotient % 2 == 0) {
-                *args.result += sin_res;
-            }
-        }
-    }
-
-    return NULL;
-}
-
 void print_timing(struct timing *timing) {
     printf("Generation time: %f sec\n", timing->gen);
-    printf("Map time: %f sec\n", timing->map);
-    printf("Merge time: %f sec\n", timing->merge);
-    printf("Sort time: %f sec\n", timing->sort);
-    printf("Reduce time: %f sec\n", timing->reduce);
+    printf("Map        time: %f sec\n", timing->map);
+    printf("Merge      time: %f sec\n", timing->merge);
+    printf("Sort       time: %f sec\n", timing->sort);
+    printf("Reduce     time: %f sec\n", timing->reduce);
+}
+
+struct span {
+    size_t start;
+    size_t size;
+};
+
+struct span get_span(const size_t threads, const size_t idx, const int n) {
+    const size_t span_len_max = n / threads + (n % threads > 0);
+    const size_t span_start = idx * span_len_max;
+    const size_t span_end_max = span_start + span_len_max;
+    const size_t span_end = span_end_max > n ? n : span_end_max;
+    const size_t span_len = span_end - span_start;
+    struct span res = {.start = span_start, .size = span_len};
+    return res;
+}
+
+void merge_sort(float array[], float array_copy[], const int array_len,
+                const size_t threads) {
+    struct span spans[threads];
+    for (size_t i = 0; i < threads; ++i) {
+        spans[i] = get_span(threads, i, array_len);
+    }
+
+    for (int element_idx = 0; element_idx < array_len; ++element_idx) {
+        float min = INFINITY;
+        int min_span_idx = 0;
+        for (int span_idx = 0; span_idx < threads; ++span_idx) {
+            struct span *cur_span = spans + span_idx;
+            if (cur_span->size <= 0) {
+                continue;
+            }
+            if (array_copy[cur_span->start] < min) {
+                min = array_copy[cur_span->start];
+                min_span_idx = span_idx;
+            }
+        }
+        if (isinf(min) && min > 0) {
+            for (; element_idx < array_len; ++element_idx) {
+                array[element_idx] = INFINITY;
+            }
+            return;
+        }
+        array[element_idx] = min;
+        ++spans[min_span_idx].start;
+        --spans[min_span_idx].size;
+    }
+}
+
+double get_events_time(cl_event start, cl_event end) {
+    cl_ulong start_us, end_us;
+    CL_ASSERT(clGetEventProfilingInfo(start, CL_PROFILING_COMMAND_START,
+                                      sizeof(cl_ulong), &start_us, NULL));
+
+    CL_ASSERT(clGetEventProfilingInfo(end, CL_PROFILING_COMMAND_END,
+                                      sizeof(cl_ulong), &end_us, NULL));
+
+    const double factor = 1e9;
+
+    return (end_us - start_us) / factor;
 }
 
 int main(int argc, char *argv[]) {
@@ -339,22 +124,20 @@ int main(int argc, char *argv[]) {
         M = 1;
     }
 
-    const unsigned int N = atoi(argv[2]);
-
-    int errc = 0;
+    const unsigned int N = atoi(argv[3]);
+    const size_t M1_sz = N;
+    const size_t M2_sz = N / 2;
 
     cl_platform_id platform;
-    CL_ASSERT(errc, clGetPlatformIDs(1, &platform, NULL));
+    clGetPlatformIDs(1, &platform, NULL);
 
     cl_device_id device;
-    CL_ASSERT(errc,
-              clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL));
+    clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
 
     const cl_context context =
-        clCreateContext(NULL, 1, &device, NULL, NULL, &errc);
-    EC_ASSERT(errc);
+        clCreateContext(NULL, 1, &device, NULL, NULL, NULL);
 
-    const char *cl_path = argv[3];
+    const char *cl_path = argv[2];
     const int cl_fd = open(cl_path, O_RDONLY);
     if (cl_fd < 0) {
         fprintf(stderr, "Failed to open file '%s': %s\n", cl_path,
@@ -373,57 +156,62 @@ int main(int argc, char *argv[]) {
         mmap(NULL, program_size, PROT_READ, MAP_PRIVATE, cl_fd, 0);
 
     const cl_program program = clCreateProgramWithSource(
-        context, 1, &program_source, &program_size, &errc);
-    EC_ASSERT(errc);
+        context, 1, &program_source, &program_size, NULL);
 
-    errc = clBuildProgram(program, 1, &device, NULL, NULL, NULL);
-    if (errc != CL_SUCCESS) {
+    if (clBuildProgram(program, 1, &device, NULL, NULL, NULL) != CL_SUCCESS) {
         size_t log_size = 0;
-        CL_ASSERT(errc,
-                  clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG,
-                                        0, NULL, &log_size));
+        clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL,
+                              &log_size);
         char log[log_size];
-        CL_ASSERT(errc,
-                  clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG,
-                                        log_size, log, NULL));
+        clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log_size,
+                              log, NULL);
         fprintf(stderr, "Failed to build program in %s: %s\n", cl_path, log);
         return -1;
     }
 
+    cl_queue_properties props[] = {CL_QUEUE_PROPERTIES,
+                                   CL_QUEUE_PROFILING_ENABLE};
+
     cl_command_queue queue =
-        clCreateCommandQueueWithProperties(context, device, NULL, &errc);
-    EC_ASSERT(errc);
+        clCreateCommandQueueWithProperties(context, device, props, NULL);
 
-    cl_mem buffer =
-        clCreateBuffer(context, CL_MEM_WRITE_ONLY,
-                       M * sizeof(cl_int), NULL, &errc);
-    EC_ASSERT(errc);
+    cl_mem M1_buf = clCreateBuffer(context, CL_MEM_READ_WRITE,
+                                   M1_sz * sizeof(cl_float), NULL, NULL);
 
-    const cl_kernel kernel = clCreateKernel(program, "setids", &errc);
-    EC_ASSERT(errc);
+    cl_mem M2_buf = clCreateBuffer(context, CL_MEM_READ_WRITE,
+                                   M2_sz * sizeof(cl_float), NULL, NULL);
 
-    CL_ASSERT(errc, clSetKernelArg(kernel, 0, sizeof(cl_mem), &buffer));
-    CL_ASSERT(errc, clSetKernelArg(kernel, 1, sizeof(int), &M));
+    cl_mem M2_copy_buf = clCreateBuffer(context, CL_MEM_READ_WRITE,
+                                        M2_sz * sizeof(cl_float), NULL, NULL);
 
-    CL_ASSERT(errc, clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &M, NULL, 0,
-                                           NULL, NULL));
+    cl_mem result_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
+                                       M * sizeof(cl_float), NULL, NULL);
 
-    CL_ASSERT(errc, clFinish(queue));
+    const cl_kernel map_k = clCreateKernel(program, "map_k", NULL);
+    clSetKernelArg(map_k, 0, sizeof(cl_mem), &M1_buf);
 
-    const cl_int *ptr = (const cl_int *)clEnqueueMapBuffer(
-        queue, buffer, true, CL_MAP_READ, 0, sizeof(cl_uint)*M, 0, NULL, NULL,
-        &errc);
-    EC_ASSERT(errc);
+    const cl_kernel map2_k = clCreateKernel(program, "map2_k", NULL);
+    clSetKernelArg(map2_k, 0, sizeof(cl_mem), &M2_buf);
+    clSetKernelArg(map2_k, 1, sizeof(cl_mem), &M2_copy_buf);
 
-    for (int i = 0; i < M; ++i) {
-        printf("Got result from CL: %d:%d\n", i, ptr[i]);
-    }
+    const cl_kernel merge_k = clCreateKernel(program, "merge_k", NULL);
+    clSetKernelArg(merge_k, 0, sizeof(cl_mem), &M1_buf);
+    clSetKernelArg(merge_k, 1, sizeof(cl_mem), &M2_buf);
 
-    return 0;
+    const cl_kernel split_sort_k =
+        clCreateKernel(program, "split_sort_k", NULL);
+    clSetKernelArg(split_sort_k, 0, sizeof(cl_mem), &M2_buf);
+    clSetKernelArg(split_sort_k, 1, sizeof(cl_int), &N);
 
-    float *M1 = malloc(sizeof(float) * N);
-    float *M2 = malloc(sizeof(float) * N / 2);
-    float *M2_copy = malloc(sizeof(float) * N / 2 + 1);
+    const cl_kernel reduce_k = clCreateKernel(program, "reduce_k", NULL);
+    clSetKernelArg(reduce_k, 0, sizeof(cl_mem), &M2_buf);
+    clSetKernelArg(reduce_k, 1, sizeof(cl_int), &N);
+    clSetKernelArg(reduce_k, 3, sizeof(cl_mem), &result_buf);
+
+    float *M1 = malloc(sizeof(float) * M1_sz);
+    float *M2 = malloc(sizeof(float) * M2_sz);
+    float *M2_copy = malloc(sizeof(float) * M2_sz);
+    float *results = malloc(sizeof(float) * M);
 
     const int loop_size = 100;
 
@@ -432,30 +220,10 @@ int main(int argc, char *argv[]) {
 
     float Xs[loop_size];
 
-    atomic_int iterations_done = 0;
-    int iterations_done_local = 0;
-
-    pthread_cond_t done_cv = PTHREAD_COND_INITIALIZER;
-    pthread_mutex_t done_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-    pthread_t progress_thread;
-
-    struct counting_thread_args counting_thread_args = {
-        .max_iterations = loop_size,
-        .iterations_done = &iterations_done,
-        .done_cv = &done_cv,
-        .done_mutex = &done_mutex,
-    };
-
-    pthread_create(&progress_thread, NULL, &counting_thread,
-                   &counting_thread_args);
-
     struct timing total_timing = {};
 
     for (int i = 0; i < loop_size; i++) {
-        struct timing iteration_timing;
-
-        double t_start = get_wtime();
+        const double t_start = get_wtime();
 
         unsigned int rand_seed = i;
 
@@ -469,63 +237,97 @@ int main(int argc, char *argv[]) {
             M2[m2_i] = rand_f_r(&rand_seed, A, 10 * A);
         }
 
-        iteration_timing.gen = get_wtime();
+        const double t_gen_done = get_wtime();
 
-        pthread_barrier_t barrier;
-        pthread_barrier_init(&barrier, NULL, M);
+        cl_event buf_writes[2];
+        CL_ASSERT(clEnqueueWriteBuffer(queue, M1_buf, CL_TRUE, 0,
+                                       N * sizeof(cl_float), M1, 0, NULL,
+                                       &buf_writes[0]));
+        CL_ASSERT(clEnqueueWriteBuffer(queue, M2_buf, CL_TRUE, 0,
+                                       N / 2 * sizeof(cl_float), M2, 0, NULL,
+                                       &buf_writes[1]));
 
-        atomic_int unassigned_iters = N / 2;
-        float results[M];
+        cl_event map_e;
+        CL_ASSERT(clEnqueueNDRangeKernel(queue, map_k, 1, NULL, &M1_sz, NULL, 1,
+                                         &buf_writes[0], &map_e));
 
-        struct work_args args[M];
+        cl_event copy1_e;
+        CL_ASSERT(clEnqueueCopyBuffer(queue, M2_buf, M2_copy_buf, 0, 0,
+                                      M2_sz * sizeof(cl_float), 1,
+                                      &buf_writes[1], &copy1_e));
 
-        pthread_t work_threads[M];
+        cl_event wait[] = {map_e, copy1_e};
+        cl_event map2_e;
+        CL_ASSERT(clEnqueueNDRangeKernel(queue, map2_k, 1, NULL, &M2_sz, NULL,
+                                         2, wait, &map2_e));
 
-        for (int m = 0; m < M; ++m) {
-            args[m].tid = m;
-            args[m].N = N;
-            args[m].M = M;
-            args[m].M1 = M1;
-            args[m].M2 = M2;
-            args[m].M2_copy = M2_copy;
-            args[m].result = &results[m];
-            args[m].barrier = &barrier;
-            args[m].reduction.unassigned_iters = &unassigned_iters;
-            args[m].reduction.min_chunk_size = 100;
-            args[m].timing = &iteration_timing;
+        cl_event merge_e;
+        CL_ASSERT(clEnqueueNDRangeKernel(queue, merge_k, 1, NULL, &M2_sz, NULL,
+                                         1, &map2_e, &merge_e));
 
-            if (m > 0) {
-                pthread_create(&work_threads[m], NULL, &work, &args[m]);
+        cl_event sort_e;
+        CL_ASSERT(clEnqueueNDRangeKernel(queue, split_sort_k, 1, NULL, &M, NULL,
+                                         1, &merge_e, &sort_e));
+
+        cl_event read_e;
+        // Complex move: load M2_buf as M2_copy so that merge_sort will write to
+        // M2 and we can work with M2 later without additional buffer copies
+        CL_ASSERT(clEnqueueReadBuffer(queue, M2_buf, CL_FALSE, 0,
+                                      M2_sz * sizeof(cl_float), M2_copy, 1,
+                                      &sort_e, &read_e));
+        CL_ASSERT(clFinish(queue));
+
+        const double t_sort_start = get_wtime();
+
+        merge_sort(M2, M2_copy, M2_sz, M);
+
+        const double t_sort_end = get_wtime();
+
+        float min = 0;
+        for (int m2_i = 0; m2_i < N / 2; ++m2_i) {
+            if (M2[m2_i] != 0) {
+                min = M2[m2_i];
+                break;
             }
         }
-        work(&args[0]);
-        Xs[i] = results[0];
-
-        for (int m = 1; m < M; ++m) {
-            pthread_join(work_threads[m], NULL);
-            Xs[i] += results[m];
+        if (min == 0) {
+            abort();
         }
 
-        iteration_timing.reduce = get_wtime();
+        cl_event write_e;
+        CL_ASSERT(clEnqueueWriteBuffer(queue, M2_buf, CL_FALSE, 0,
+                                       M2_sz * sizeof(cl_float), M2, 0, NULL,
+                                       &write_e));
 
-        total_timing.gen += iteration_timing.gen - t_start;
-        total_timing.map += iteration_timing.map - iteration_timing.gen;
-        total_timing.merge += iteration_timing.merge - iteration_timing.map;
-        total_timing.sort += iteration_timing.sort - iteration_timing.merge;
-        total_timing.reduce += iteration_timing.reduce - iteration_timing.sort;
+        cl_event reduce_e;
+        CL_ASSERT(clSetKernelArg(reduce_k, 2, sizeof(cl_float), &min));
+        CL_ASSERT(clEnqueueNDRangeKernel(queue, reduce_k, 1, NULL, &M, NULL, 1,
+                                         &write_e, &reduce_e));
 
-        ++iterations_done_local;
-        atomic_store_explicit(&iterations_done, iterations_done_local,
-                              memory_order_relaxed);
+        CL_ASSERT(clEnqueueReadBuffer(queue, result_buf, CL_FALSE, 0,
+                                      M * sizeof(cl_float), results, 1,
+                                      &reduce_e, NULL));
+        CL_ASSERT(clFinish(queue));
+
+        float X = 0;
+        for (int m_i = 0; m_i < M; ++m_i) {
+            X += results[m_i];
+        }
+
+        Xs[i] = X;
+
+        const double t_reduce_done = get_wtime();
+
+        total_timing.gen += t_gen_done - t_start;
+        total_timing.map += get_events_time(map_e, map2_e);
+        total_timing.merge += get_events_time(merge_e, merge_e);
+        total_timing.sort +=
+            t_sort_end - t_sort_start + get_events_time(sort_e, read_e);
+        total_timing.reduce += t_reduce_done - t_sort_end;
+        break;
     }
 
     T2 = get_wtime();
-
-    pthread_mutex_lock(&done_mutex);
-    pthread_cond_signal(&done_cv);
-    pthread_mutex_unlock(&done_mutex);
-
-    pthread_join(progress_thread, NULL);
 
     print_timing(&total_timing);
 
