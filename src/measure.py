@@ -22,6 +22,7 @@ delta_re = re.compile(rb'^.*Milliseconds passed: (.+)$')
 timing_re = re.compile(rb'^.*time: (.+) sec$')
 
 timing_names = ['Generation', 'Map', 'Merge', 'Sort', 'Reduce']
+iterations: int = 10
 
 @dataclass
 class ProcessResult:
@@ -59,26 +60,22 @@ def process(exe: str, thread_num: int):
     total_results: list[pd.DataFrame] = []
 
     for point in points:
-        results: list[ProcessResult] = [
-            process_single(exe, thread_num, point)
-            for _i in range(10)
-        ]
-        min_idx = np.argmin([result.total for result in results])
-        min_result = results[min_idx]
-        min_delta = min_result.total
-        print(f"{point};{min_delta}")
+        for iteration in range(iterations):
+            result: ProcessResult = process_single(exe, thread_num, point)
+            print(f"{point};{result.total}")
 
-        results_map: dict[str, float] = {
-            'N': point,
-            'min': min_result.total,
-        }
+            results_map: dict[str, float] = {
+                'N': point,
+                'T': result.total,
+                'iter': iteration,
+            }
 
-        for name, timing in zip(timing_names, min_result.timings):
-            results_map[name] = timing
+            for name, timing in zip(timing_names, result.timings):
+                results_map[name] = timing
 
-        results_df: pd.DataFrame = pd.DataFrame([results_map])
+            results_df: pd.DataFrame = pd.DataFrame([results_map])
 
-        total_results.append(results_df)
+            total_results.append(results_df)
 
     df: pd.DataFrame = pd.concat(total_results)
     df.set_index('N', inplace=True)
