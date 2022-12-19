@@ -327,7 +327,9 @@ int main(int argc, char *argv[]) {
         const double t_reduce_done = get_wtime();
 
         total_timing.gen += t_gen_done - t_start;
-        total_timing.map += get_events_time(buf_writes[0], map2_e);
+        const double t1 = get_events_time(buf_writes[0], map2_e);
+        const double t2 = get_events_time(buf_writes[1], map2_e);
+        total_timing.map += t1 > t2 ? t1 : t2;
         total_timing.merge += get_events_time(merge_e, merge_e);
         total_timing.sort +=
             t_sort_end - t_sort_start + get_events_time(sort_e, read_e);
