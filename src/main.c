@@ -250,10 +250,10 @@ int main(int argc, char *argv[]) {
         const double t_gen_done = get_wtime();
 
         cl_event buf_writes[2];
-        CL_ASSERT(clEnqueueWriteBuffer(queue, M1_buf, CL_TRUE, 0,
+        CL_ASSERT(clEnqueueWriteBuffer(queue, M1_buf, CL_FALSE, 0,
                                        N * sizeof(cl_float), M1, 0, NULL,
                                        &buf_writes[0]));
-        CL_ASSERT(clEnqueueWriteBuffer(queue, M2_buf, CL_TRUE, 0,
+        CL_ASSERT(clEnqueueWriteBuffer(queue, M2_buf, CL_FALSE, 0,
                                        N / 2 * sizeof(cl_float), M2, 0, NULL,
                                        &buf_writes[1]));
 
